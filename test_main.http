@@ -1,11 +1,59 @@
-# Test your FastAPI endpoints
+@baseUrl = http://127.0.0.1:8000
 
-GET http://127.0.0.1:8000/
+### 首页
+GET {{baseUrl}}/
 Accept: application/json
 
-###
-
-GET http://127.0.0.1:8000/hello/User
+### 路径参数
+GET {{baseUrl}}/hello/Codex
 Accept: application/json
 
-###
+### 分类 ID 校验
+GET {{baseUrl}}/categories/id/5
+Accept: application/json
+
+### 查询参数、搜索与分页
+GET {{baseUrl}}/search?keyword=FastAPI&skip=0&limit=10
+Accept: application/json
+
+### 查询全部任务
+GET {{baseUrl}}/tasks
+Accept: application/json
+
+### 查询单条任务
+GET {{baseUrl}}/tasks/2
+Accept: application/json
+
+### 创建任务
+POST {{baseUrl}}/tasks
+Content-Type: application/json
+
+{
+  "title": "学习请求体",
+  "done": false
+}
+
+### 完整更新任务
+PUT {{baseUrl}}/tasks/2
+Content-Type: application/json
+
+{
+  "title": "完成 FastAPI 基础",
+  "done": true
+}
+
+### 局部更新任务
+PATCH {{baseUrl}}/tasks/2
+Content-Type: application/json
+
+{
+  "done": false
+}
+
+### 删除任务
+DELETE {{baseUrl}}/tasks/4
+Accept: application/json
+
+### 404 测试
+GET {{baseUrl}}/tasks/999
+Accept: application/json

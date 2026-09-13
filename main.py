@@ -2,8 +2,10 @@ from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
+from openai import APIConnectionError
 
 import database
+import llm_service
 
 
 class TaskCreate(BaseModel):
@@ -40,6 +42,14 @@ class DeleteResponse(BaseModel):
     msg: str
     data: TaskResponse
 
+
+class AskRequest(BaseModel):
+    question: str = Field(
+        min_length=1,
+    )
+
+class AskResponse(BaseModel):
+    answer: str
 
 app = FastAPI(
     title="FastAPI 任务练习",
@@ -160,3 +170,31 @@ async def delete_task(task_id: int):
         "msg": "Task deleted",
         "data": deleted_task,
     }
+
+
+@app.post(
+    "/ai/ask",
+    response_model=AskResponse,
+)
+def ai_question(request: AskRequest):
+    if not llm_service.api_key or not llm_service.base_url or not llm_service.model:
+        raise HTTPException(
+            status_code=503,
+            detail="模型服务未配置",
+        )
+
+    try:
+        answer = llm_service.ask_llm(request.question)
+    except APIConnectionError:
+        raise HTTPException(
+            status_code=503,
+            detail="模型服务暂不可用",
+        )
+
+    if not answer or not answer.strip():
+        raise HTTPException(
+            status_code=502,
+            detail="模型未返回有效回答",
+        )
+
+    return {"answer": answer}

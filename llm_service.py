@@ -23,3 +23,13 @@ def ask_llm(question: str):
 
     return response.choices[0].message.content
 
+
+def ask_chat(messages: list[dict[str, str]]) -> str | None:
+    client = OpenAI(api_key=api_key, base_url=base_url)
+
+    response = client.chat.completions.create(
+        model = model,
+        messages = messages,
+    )
+
+    return response.choices[0].message.content

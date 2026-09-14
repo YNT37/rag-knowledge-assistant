@@ -4,6 +4,8 @@ from  httpx2 import Request
 
 from main import app
 import llm_service
+import database
+
 
 client = TestClient(app)
 
@@ -144,3 +146,68 @@ def test_ai_ask_returns_503_when_api_key_is_missing(monkeypatch):
 
     assert response.status_code == 503
     assert response.json() == {"detail": "模型服务未配置"}
+
+
+def test_database_uses_temporary_file(tmp_path, monkeypatch):
+    test_db = tmp_path / "tasks_test.db"
+    monkeypatch.setattr(database, "DATABASE_PATH", test_db)
+
+    database.init_db()
+
+    assert test_db.exists()
+    assert database.get_all_tasks() == []
+
+
+def test_ai_chat_sends_history_and_current_question(monkeypatch):
+    monkeypatch.setattr(llm_service, "api_key", "test_key")
+    monkeypatch.setattr(llm_service, "base_url", "https://example.invalid")
+    monkeypatch.setattr(llm_service, "model", "test_model")
+
+    def fask_ask_llm(messages):
+        assert messages == [
+            {"role": "system", "content": "你是一名耐心的 Python 老师。"},
+            {"role": "user", "content": "我正在学习 FastAPI"},
+            {"role": "assistant", "content": "FastAPI 是后端框架"},
+            {"role": "user", "content": "它能做什么？"},
+        ]
+
+        return "它可以编写后端 API"
+
+    monkeypatch.setattr(llm_service, "ask_chat", fask_ask_llm)
+
+    response = client.post(
+        "/ai/chat",
+        json={
+            "question": "它能做什么？",
+            "history": [
+                {"role": "user", "content": "我正在学习 FastAPI"},
+                {"role": "assistant", "content": "FastAPI 是后端框架"},
+            ],
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"answer": "它可以编写后端 API"}
+
+def test_ai_chat_works_without_history(monkeypatch):
+    monkeypatch.setattr(llm_service, "api_key", "test_key")
+    monkeypatch.setattr(llm_service, "base_url", "https://example.invalid")
+    monkeypatch.setattr(llm_service, "model", "test_model")
+
+    def fask_ask_llm(messages):
+        assert messages == [
+                {"role": "system", "content": "你是一名耐心的 Python 老师。"},
+                {"role": "user", "content": "我正在学习 FastAPI"},
+        ]
+
+        return "欢迎学习 FastAPI"
+
+    monkeypatch.setattr(llm_service, "ask_chat", fask_ask_llm)
+
+    response = client.post(
+        "/ai/chat",
+        json = {"question": "我正在学习 FastAPI"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"answer": "欢迎学习 FastAPI"}

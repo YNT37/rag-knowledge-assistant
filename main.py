@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -6,6 +6,7 @@ from openai import APIConnectionError
 
 import database
 import llm_service
+
 
 
 class TaskCreate(BaseModel):
@@ -50,6 +51,22 @@ class AskRequest(BaseModel):
 
 class AskResponse(BaseModel):
     answer: str
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(
+        min_length=1
+    )
+
+
+class ChatRequest(BaseModel):
+    question: str = Field(
+        min_length=1
+    )
+    history: list[ChatMessage] = Field(
+        default_factory=list
+    )
 
 app = FastAPI(
     title="FastAPI 任务练习",
@@ -195,6 +212,57 @@ def ai_question(request: AskRequest):
         raise HTTPException(
             status_code=502,
             detail="模型未返回有效回答",
+        )
+
+    return {"answer": answer}
+
+def build_chat_messages(request: ChatRequest) -> list[dict[str, str]]:
+    messages = [
+        {
+            "role": "system",
+            "content": "你是一名耐心的 Python 老师。"
+        }
+    ]
+
+    for previous in request.history:
+        messages.append({
+            "role": previous.role,
+            "content": previous.content,
+        })
+
+    messages.append({
+        "role": "user",
+        "content": request.question
+    })
+
+    return messages
+
+
+@app.post(
+    "/ai/chat",
+    response_model=AskResponse
+)
+def ai_chat(request: ChatRequest):
+    if not llm_service.api_key or not llm_service.base_url or not llm_service.model:
+        raise HTTPException(
+            status_code=503,
+            detail="模型服务未配置"
+        )
+
+    messages = build_chat_messages(request)
+
+    try:
+        answer = llm_service.ask_chat(messages)
+    except APIConnectionError:
+        raise HTTPException(
+            status_code=503,
+            detail="模型服务暂不可用"
+        )
+
+    if not answer or not answer.strip():
+        raise HTTPException(
+            status_code=502,
+            detail="模型未返回有效回答"
         )
 
     return {"answer": answer}

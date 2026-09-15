@@ -187,7 +187,15 @@ def test_ai_chat_sends_history_and_current_question(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json() == {"answer": "它可以编写后端 API"}
+    assert response.json() == {
+        "answer": "它可以编写后端 API",
+        "history": [
+            {"role": "user", "content": "我正在学习 FastAPI"},
+            {"role": "assistant", "content": "FastAPI 是后端框架"},
+            {"role": "user", "content": "它能做什么？"},
+            {"role": "assistant", "content": "它可以编写后端 API"},
+        ]
+    }
 
 def test_ai_chat_works_without_history(monkeypatch):
     monkeypatch.setattr(llm_service, "api_key", "test_key")
@@ -210,4 +218,10 @@ def test_ai_chat_works_without_history(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json() == {"answer": "欢迎学习 FastAPI"}
+    assert response.json() == {
+        "answer": "欢迎学习 FastAPI",
+        "history": [
+            {"role": "user", "content": "我正在学习 FastAPI"},
+            {"role": "assistant", "content": "欢迎学习 FastAPI"},
+        ]
+    }

@@ -68,6 +68,11 @@ class ChatRequest(BaseModel):
         default_factory=list
     )
 
+
+class ChatResponse(BaseModel):
+    answer: str
+    history: list[ChatMessage]
+
 app = FastAPI(
     title="FastAPI 任务练习",
     description="用于学习路由、参数校验、请求体、响应模型和 CRUD。",
@@ -240,7 +245,7 @@ def build_chat_messages(request: ChatRequest) -> list[dict[str, str]]:
 
 @app.post(
     "/ai/chat",
-    response_model=AskResponse
+    response_model=ChatResponse
 )
 def ai_chat(request: ChatRequest):
     if not llm_service.api_key or not llm_service.base_url or not llm_service.model:
@@ -265,4 +270,11 @@ def ai_chat(request: ChatRequest):
             detail="模型未返回有效回答"
         )
 
-    return {"answer": answer}
+    updated_history = list(request.history)
+    updated_history.append(ChatMessage(role = "user", content = request.question))
+    updated_history.append(ChatMessage(role = "assistant", content = answer))
+
+    return {
+        "answer": answer,
+        "history": updated_history,
+    }

@@ -1,10 +1,11 @@
 from fastapi.testclient import TestClient
+from httpx2 import Request
 from openai import APIConnectionError
-from  httpx2 import Request
 
-from main import app
-import llm_service
 import database
+import llm_service
+import rag_service
+from main import app
 
 
 client = TestClient(app)
@@ -16,11 +17,13 @@ def test_root():
     assert response.status_code == 200
     assert response.json() == {"msg": "Hello World"}
 
+
 def test_get_missing_task():
     response = client.get("/tasks/999")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Task not found"}
+
 
 def test_get_tasks_returns_list():
     response = client.get("/tasks")
@@ -29,6 +32,7 @@ def test_get_tasks_returns_list():
     assert response.status_code == 200
     assert isinstance(data, list)
 
+
 def test_search_rejects_invalid_limit():
     response = client.get(
         "/search",
@@ -36,6 +40,7 @@ def test_search_rejects_invalid_limit():
     )
 
     assert response.status_code == 422
+
 
 def test_create_task_rejects_empty_title():
     response = client.post(
@@ -48,6 +53,7 @@ def test_create_task_rejects_empty_title():
 
     assert response.status_code == 422
 
+
 def test_ai_ask_rejects_empty_question():
     response = client.post(
         "/ai/ask",
@@ -58,8 +64,9 @@ def test_ai_ask_rejects_empty_question():
 
     assert response.status_code == 422
 
+
 def test_ai_ask_returns_model_answer(monkeypatch):
-    def fake_ask_llm(question:str):
+    def fake_ask_llm(question: str):
         assert question == "什么是请求体？"
         return "模拟回答"
 
@@ -73,8 +80,9 @@ def test_ai_ask_returns_model_answer(monkeypatch):
     assert response.status_code == 200
     assert response.json() == {"answer": "模拟回答"}
 
+
 def test_ai_ask_returns_503_when_ask_fails(monkeypatch):
-    def fake_ask_llm(question:str):
+    def fake_ask_llm(question: str):
         raise APIConnectionError(
             request=Request("post", "https://example.invalid")
         )
@@ -89,8 +97,9 @@ def test_ai_ask_returns_503_when_ask_fails(monkeypatch):
     assert response.status_code == 503
     assert response.json() == {"detail": "模型服务暂不可用"}
 
+
 def test_ai_ask_returns_502_when_response_is_none(monkeypatch):
-    def fake_ask_llm(question:str):
+    def fake_ask_llm(question: str):
         return None
 
     monkeypatch.setattr(llm_service, "ask_llm", fake_ask_llm)
@@ -103,11 +112,12 @@ def test_ai_ask_returns_502_when_response_is_none(monkeypatch):
     assert response.status_code == 502
     assert response.json() == {"detail": "模型未返回有效回答"}
 
+
 def test_ai_ask_returns_502_when_response_is_empty(monkeypatch):
-    def fask_ask_llm(question:str):
+    def fake_ask_llm(question: str):
         return ""
 
-    monkeypatch.setattr(llm_service, "ask_llm", fask_ask_llm)
+    monkeypatch.setattr(llm_service, "ask_llm", fake_ask_llm)
 
     response = client.post(
         "/ai/ask",
@@ -117,11 +127,12 @@ def test_ai_ask_returns_502_when_response_is_empty(monkeypatch):
     assert response.status_code == 502
     assert response.json() == {"detail": "模型未返回有效回答"}
 
+
 def test_ai_ask_returns_502_when_response_is_whitespace(monkeypatch):
-    def fask_ask_llm(question:str):
+    def fake_ask_llm(question: str):
         return "   "
 
-    monkeypatch.setattr(llm_service, "ask_llm", fask_ask_llm)
+    monkeypatch.setattr(llm_service, "ask_llm", fake_ask_llm)
 
     response = client.post(
         "/ai/ask",
@@ -133,11 +144,11 @@ def test_ai_ask_returns_502_when_response_is_whitespace(monkeypatch):
 
 
 def test_ai_ask_returns_503_when_api_key_is_missing(monkeypatch):
-    def fask_ask_llm(question:str):
+    def fake_ask_llm(question: str):
         return "模拟回答"
 
     monkeypatch.setattr(llm_service, "api_key", None )
-    monkeypatch.setattr(llm_service, "ask_llm", fask_ask_llm)
+    monkeypatch.setattr(llm_service, "ask_llm", fake_ask_llm)
 
     response = client.post(
         "/ai/ask",
@@ -163,7 +174,7 @@ def test_ai_chat_sends_history_and_current_question(monkeypatch):
     monkeypatch.setattr(llm_service, "base_url", "https://example.invalid")
     monkeypatch.setattr(llm_service, "model", "test_model")
 
-    def fask_ask_llm(messages):
+    def fake_ask_llm(messages):
         assert messages == [
             {"role": "system", "content": "你是一名耐心的 Python 老师。"},
             {"role": "user", "content": "我正在学习 FastAPI"},
@@ -173,7 +184,7 @@ def test_ai_chat_sends_history_and_current_question(monkeypatch):
 
         return "它可以编写后端 API"
 
-    monkeypatch.setattr(llm_service, "ask_chat", fask_ask_llm)
+    monkeypatch.setattr(llm_service, "ask_chat", fake_ask_llm)
 
     response = client.post(
         "/ai/chat",
@@ -202,7 +213,7 @@ def test_ai_chat_works_without_history(monkeypatch):
     monkeypatch.setattr(llm_service, "base_url", "https://example.invalid")
     monkeypatch.setattr(llm_service, "model", "test_model")
 
-    def fask_ask_llm(messages):
+    def fake_ask_llm(messages):
         assert messages == [
                 {"role": "system", "content": "你是一名耐心的 Python 老师。"},
                 {"role": "user", "content": "我正在学习 FastAPI"},
@@ -210,7 +221,7 @@ def test_ai_chat_works_without_history(monkeypatch):
 
         return "欢迎学习 FastAPI"
 
-    monkeypatch.setattr(llm_service, "ask_chat", fask_ask_llm)
+    monkeypatch.setattr(llm_service, "ask_chat", fake_ask_llm)
 
     response = client.post(
         "/ai/chat",
@@ -224,4 +235,545 @@ def test_ai_chat_works_without_history(monkeypatch):
             {"role": "user", "content": "我正在学习 FastAPI"},
             {"role": "assistant", "content": "欢迎学习 FastAPI"},
         ]
+    }
+
+
+def test_ai_rag_returns_answer(monkeypatch):
+    def fake_answer_with_rag(question: str):
+        assert question == "FastAPI 有什么作用？"
+        return "FastAPI 是一个 Python Web 框架"
+
+    monkeypatch.setattr(rag_service, "answer_with_rag", fake_answer_with_rag)
+
+    response = client.post(
+        "/ai/rag",
+        json={
+            "question": "FastAPI 有什么作用？",
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "answer": "FastAPI 是一个 Python Web 框架"
+    }
+
+
+def test_ai_rag_returns_502_when_answer_is_none(monkeypatch):
+    def fake_answer_with_rag(question: str):
+        return None
+
+    monkeypatch.setattr(rag_service, "answer_with_rag", fake_answer_with_rag)
+
+    response = client.post(
+        "/ai/rag",
+        json={
+            "question": "FastAPI 有什么作用？",
+        },
+    )
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "模型未返回有效回答",
+    }
+
+
+def test_ai_rag_returns_503_when_connection_fails(monkeypatch):
+    def fake_answer_with_rag(question: str):
+        raise APIConnectionError(
+            request=Request(
+                "POST",
+                 "https://example.invalid",
+            )
+        )
+
+    monkeypatch.setattr(rag_service, "answer_with_rag", fake_answer_with_rag)
+
+    response = client.post(
+        "/ai/rag",
+        json={
+            "question": "FastAPI 有什么作用？",
+        }
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "模型服务暂不可用",
+    }
+
+
+def test_ai_rag_rejects_whitespace_question(monkeypatch):
+    def fake_answer_with_rag(question: str):
+        raise AssertionError(
+            "无效问题不应该调用 RAG 服务"
+        )
+
+    monkeypatch.setattr(rag_service, "answer_with_rag", fake_answer_with_rag)
+
+    response = client.post(
+        "/ai/rag",
+        json={
+            "question": "   ",
+        }
+    )
+
+    assert response.status_code == 422
+
+
+def test_ai_rag_rejects_question_longer_than_500_characters(monkeypatch):
+    def fake_answer_with_rag(question: str):
+        raise AssertionError(
+            "无效问题不应该调用 RAG 服务"
+        )
+
+    monkeypatch.setattr(rag_service, "answer_with_rag", fake_answer_with_rag)
+
+    long_question = "问" * 501
+
+    response = client.post(
+        "/ai/rag",
+        json={
+            "question": long_question,
+        }
+    )
+
+    assert response.status_code == 422
+
+
+def test_ai_rag_accepts_question_with_500_characters(monkeypatch):
+    def fake_answer_with_rag(question: str):
+        assert len(question) == 500
+        return "模拟回答"
+
+    monkeypatch.setattr(rag_service, "answer_with_rag", fake_answer_with_rag)
+
+    question = "问" * 500
+
+    response = client.post(
+        "/ai/rag",
+        json={
+            "question": question,
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "answer": "模拟回答",
+    }
+
+
+def test_ai_rag_strips_surrounding_whitespace(monkeypatch):
+    def fake_answer_with_rag(question: str):
+        assert question == "FastAPI 有什么作用？"
+        return "模拟回答"
+
+    monkeypatch.setattr(rag_service, "answer_with_rag", fake_answer_with_rag)
+
+    response = client.post(
+        "/ai/rag",
+        json={
+            "question": "   FastAPI 有什么作用？   \n",
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "answer": "模拟回答",
+    }
+
+
+def test_ai_rag_returns_fallback_when_no_relevant_documents(monkeypatch):
+    def fake_answer_with_rag(question: str):
+        assert question == "如何制作巧克力蛋糕？"
+        return "根据现有资料无法回答"
+
+    monkeypatch.setattr(rag_service, "answer_with_rag", fake_answer_with_rag)
+
+    response = client.post(
+        "/ai/rag",
+        json={
+            "question": "如何制作巧克力蛋糕？",
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "answer": "根据现有资料无法回答",
+    }
+
+
+def test_ai_rag_rejects_missing_question(monkeypatch):
+    def fake_answer_with_rag(question: str):
+        raise AssertionError(
+            "无效问题不应该调用 RAG 服务"
+        )
+
+    monkeypatch.setattr(rag_service, "answer_with_rag", fake_answer_with_rag)
+
+    response = client.post(
+        "/ai/rag",
+        json={},
+    )
+
+    assert response.status_code == 422
+
+
+def test_ai_retrieve_returns_search_results(monkeypatch):
+    def fake_search_chunks(
+        question: str,
+        top_k: int = 3,
+        min_score: float = 0.5,
+    ) -> list[dict]:
+        assert question == "什么工具可以管理代码版本？"
+        assert top_k == 2
+        assert min_score == 0.5
+
+        return [
+            {
+                "rank": 1,
+                "source": "git.md",
+                "chunk_id": 1,
+                "content": "Git 是一个分布式版本控制系统。",
+                "score": 0.63,
+            }
+        ]
+
+    monkeypatch.setattr(
+        rag_service,
+        "search_chunks",
+        fake_search_chunks,
+    )
+
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "question": "什么工具可以管理代码版本？",
+            "top_k": 2,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "question": "什么工具可以管理代码版本？",
+        "count": 1,
+        "data": [
+            {
+                "rank": 1,
+                "source": "git.md",
+                "chunk_id": 1,
+                "content": "Git 是一个分布式版本控制系统。",
+                "score": 0.63,
+            }
+        ],
+    }
+
+
+def test_ai_retrieve_returns_empty_data_when_no_results(monkeypatch):
+    def fake_search_chunks(
+        question: str,
+        top_k: int = 3,
+        min_score: float = 0.5,
+    ) -> list[dict]:
+        return []
+
+    monkeypatch.setattr(
+        rag_service,
+        "search_chunks",
+        fake_search_chunks,
+    )
+
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "question": "什么工具可以管理代码版本？",
+            "top_k": 2,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "question": "什么工具可以管理代码版本？",
+        "count": 0,
+        "data": [],
+    }
+
+
+def test_ai_retrieve_uses_default_top_k_when_omitted(monkeypatch):
+    def fake_search_chunks(
+            question: str,
+            top_k: int,
+            min_score: float,
+    ) -> list[dict]:
+        assert question == "什么工具可以管理代码版本？"
+        assert top_k == 3
+        assert min_score == 0.5
+
+        return [
+            {
+                "rank": 1,
+                "source": "git.md",
+                "chunk_id": 1,
+                "content": "Git 是一个分布式版本控制系统。",
+                "score": 0.63,
+            }
+        ]
+
+    monkeypatch.setattr(rag_service, "search_chunks", fake_search_chunks)
+
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "question": "什么工具可以管理代码版本？",
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "question": "什么工具可以管理代码版本？",
+        "count": 1,
+        "data": [
+            {
+                "rank": 1,
+                "source": "git.md",
+                "chunk_id": 1,
+                "content": "Git 是一个分布式版本控制系统。",
+                "score": 0.63,
+            }
+        ],
+    }
+
+
+def test_ai_retrieve_rejects_missing_question(monkeypatch):
+    def fake_search_chunks(
+            question: str,
+            top_k: int,
+            min_score: float,
+    ) -> list[dict]:
+        raise AssertionError(
+            "无效问题不应该调用检索服务",
+        )
+
+    monkeypatch.setattr(rag_service, "search_chunks", fake_search_chunks)
+
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "top_k": 2,
+        }
+    )
+
+    assert response.status_code == 422
+
+def test_ai_retrieve_rejects_whitespace_only_question(monkeypatch):
+    def fake_search_chunks(
+            question: str,
+            top_k: int,
+            min_score: float,
+    ) -> list[dict]:
+        raise AssertionError(
+            "无效问题不应该调用检索服务",
+        )
+
+    monkeypatch.setattr(rag_service, "search_chunks", fake_search_chunks)
+
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "question": "   ",
+            "top_k": 2,
+        }
+    )
+
+    assert response.status_code == 422
+
+
+def test_ai_retrieve_rejects_empty_question(monkeypatch):
+    def fake_search_chunks(
+            question: str,
+            top_k: int,
+            min_score: float,
+    ) -> list[dict]:
+        raise AssertionError(
+            "无效问题不应该调用检索服务",
+        )
+
+    monkeypatch.setattr(rag_service, "search_chunks", fake_search_chunks)
+
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "question": "",
+            "top_k": 2,
+        }
+    )
+
+    assert response.status_code == 422
+
+
+def test_ai_retrieve_strips_surrounding_whitespace(monkeypatch):
+    def fake_search_chunks(
+            question: str,
+            top_k: int,
+            min_score: float,
+    ) -> list[dict]:
+        assert question == "什么工具可以管理代码版本？"
+        assert top_k == 2
+        assert min_score == 0.5
+
+        return []
+
+    monkeypatch.setattr(rag_service, "search_chunks", fake_search_chunks)
+
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "question": "  什么工具可以管理代码版本？  \n",
+            "top_k": 2,
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "question": "什么工具可以管理代码版本？",
+        "count": 0,
+        "data": [],
+    }
+
+
+def test_ai_retrieve_rejects_question_longer_than_500_characters(monkeypatch):
+    def fake_search_chunks(
+            question: str,
+            top_k: int,
+            min_score: float,
+    ) -> list[dict]:
+        raise AssertionError(
+            "无效问题不应该调用检索服务",
+        )
+
+    monkeypatch.setattr(rag_service, "search_chunks", fake_search_chunks)
+
+    longer_question = "问" * 501
+
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "question": longer_question,
+            "top_k": 2,
+        }
+    )
+
+    assert response.status_code == 422
+
+def test_ai_retrieve_accepts_question_with_500_characters(monkeypatch):
+    def fake_search_chunks(
+            question: str,
+            top_k: int,
+            min_score: float,
+    ) -> list[dict]:
+        assert len(question) == 500
+
+        return [
+            {
+                "rank": 1,
+                "source": "git.md",
+                "chunk_id": 1,
+                "content": "Git 是一个分布式版本控制系统。",
+                "score": 0.63,
+            }
+        ]
+
+    monkeypatch.setattr(rag_service, "search_chunks", fake_search_chunks)
+
+    question = "问" * 500
+
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "question": question,
+            "top_k": 2,
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "question": question,
+        "count": 1,
+        "data": [
+            {
+                "rank": 1,
+                "source": "git.md",
+                "chunk_id": 1,
+                "content": "Git 是一个分布式版本控制系统。",
+                "score": 0.63,
+            }
+        ],
+    }
+
+
+def test_ai_retrieve_rejects_top_k_below_minimum(monkeypatch):
+    def fake_search_chunks(
+            question: str,
+            top_k: int,
+            min_score: float,
+    ) -> list[dict]:
+        raise AssertionError(
+            "无效问题不应该调用检索服务",
+        )
+
+    monkeypatch.setattr(rag_service, "search_chunks", fake_search_chunks)
+
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "question": "什么工具可以管理代码版本？",
+            "top_k": 0,
+        }
+    )
+
+    assert response.status_code == 422
+
+
+def test_ai_retrieve_rejects_top_k_above_maximum(monkeypatch):
+    def fake_search_chunks(
+            question: str,
+            top_k: int,
+            min_score: float,
+    ) -> list[dict]:
+        raise AssertionError(
+            "无效问题不应该调用检索服务",
+        )
+
+    monkeypatch.setattr(rag_service, "search_chunks", fake_search_chunks)
+
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "question": "什么工具可以管理代码版本？",
+            "top_k": 11,
+        }
+    )
+
+    assert response.status_code == 422
+
+
+def test_ai_retrieve_returns_503_when_search_service_fails(monkeypatch):
+    def fake_search_chunks(
+            question: str,
+            top_k: int,
+            min_score: float,
+    ) -> list[dict]:
+        raise RuntimeError("模拟检索服务初始化失败")
+
+    monkeypatch.setattr(rag_service, "search_chunks", fake_search_chunks)
+
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "question": "什么工具可以管理代码版本？",
+            "top_k": 2,
+        }
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "检索服务暂不可用",
     }

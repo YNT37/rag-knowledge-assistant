@@ -1,12 +1,12 @@
 from typing import Annotated, Literal
 
 from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel, Field
 from openai import APIConnectionError
+from pydantic import BaseModel, Field, StringConstraints
 
 import database
 import llm_service
-
+import rag_service
 
 
 class TaskCreate(BaseModel):
@@ -49,6 +49,7 @@ class AskRequest(BaseModel):
         min_length=1,
     )
 
+
 class AskResponse(BaseModel):
     answer: str
 
@@ -56,22 +57,67 @@ class AskResponse(BaseModel):
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str = Field(
-        min_length=1
+        min_length=1,
     )
 
 
 class ChatRequest(BaseModel):
     question: str = Field(
-        min_length=1
+        min_length=1,
     )
     history: list[ChatMessage] = Field(
-        default_factory=list
+        default_factory=list,
     )
 
 
 class ChatResponse(BaseModel):
     answer: str
     history: list[ChatMessage]
+
+
+class RagRequest(BaseModel):
+    question: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=1,
+            max_length=500,
+        )
+    ]
+
+
+class RagResponse(BaseModel):
+    answer: str
+
+
+class RetrieveRequest(BaseModel):
+    question: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=1,
+            max_length=500,
+        )
+    ]
+    top_k: Annotated[
+        int,
+        Field(ge=1, le=10),
+    ] = 3
+
+
+class RetrieveItem(BaseModel):
+    rank: int
+    source: str
+    chunk_id: int
+    content: str
+    score: float
+
+
+class RetrieveResponse(BaseModel):
+    question: str
+    count: int
+    data: list[RetrieveItem]
+
 
 app = FastAPI(
     title="FastAPI 任务练习",
@@ -85,12 +131,14 @@ database.init_db()
 async def root():
     return {"msg": "Hello World"}
 
+
 @app.get(
     "/tasks",
     response_model=list[TaskResponse],
 )
 async def get_tasks():
     return database.get_all_tasks()
+
 
 @app.get(
     "/tasks/{task_id}",
@@ -199,7 +247,11 @@ async def delete_task(task_id: int):
     response_model=AskResponse,
 )
 def ai_question(request: AskRequest):
-    if not llm_service.api_key or not llm_service.base_url or not llm_service.model:
+    if (
+        not llm_service.api_key
+        or not llm_service.base_url
+        or not llm_service.model
+    ):
         raise HTTPException(
             status_code=503,
             detail="模型服务未配置",
@@ -221,11 +273,12 @@ def ai_question(request: AskRequest):
 
     return {"answer": answer}
 
+
 def build_chat_messages(request: ChatRequest) -> list[dict[str, str]]:
     messages = [
         {
             "role": "system",
-            "content": "你是一名耐心的 Python 老师。"
+            "content": "你是一名耐心的 Python 老师。",
         }
     ]
 
@@ -237,7 +290,7 @@ def build_chat_messages(request: ChatRequest) -> list[dict[str, str]]:
 
     messages.append({
         "role": "user",
-        "content": request.question
+        "content": request.question,
     })
 
     return messages
@@ -245,13 +298,17 @@ def build_chat_messages(request: ChatRequest) -> list[dict[str, str]]:
 
 @app.post(
     "/ai/chat",
-    response_model=ChatResponse
+    response_model=ChatResponse,
 )
 def ai_chat(request: ChatRequest):
-    if not llm_service.api_key or not llm_service.base_url or not llm_service.model:
+    if (
+        not llm_service.api_key
+        or not llm_service.base_url
+        or not llm_service.model
+    ):
         raise HTTPException(
             status_code=503,
-            detail="模型服务未配置"
+            detail="模型服务未配置",
         )
 
     messages = build_chat_messages(request)
@@ -261,20 +318,69 @@ def ai_chat(request: ChatRequest):
     except APIConnectionError:
         raise HTTPException(
             status_code=503,
-            detail="模型服务暂不可用"
+            detail="模型服务暂不可用",
         )
 
     if not answer or not answer.strip():
         raise HTTPException(
             status_code=502,
-            detail="模型未返回有效回答"
+            detail="模型未返回有效回答",
         )
 
     updated_history = list(request.history)
-    updated_history.append(ChatMessage(role = "user", content = request.question))
-    updated_history.append(ChatMessage(role = "assistant", content = answer))
+    updated_history.append(ChatMessage(role="user", content=request.question))
+    updated_history.append(ChatMessage(role="assistant", content=answer))
 
     return {
         "answer": answer,
         "history": updated_history,
+    }
+
+
+@app.post(
+    "/ai/rag",
+    response_model=RagResponse,
+)
+def ai_rag(request: RagRequest):
+    try:
+        answer = rag_service.answer_with_rag(request.question)
+    except APIConnectionError:
+        raise HTTPException(
+            status_code=503,
+            detail="模型服务暂不可用",
+        )
+    if answer is None:
+        raise HTTPException(
+            status_code=502,
+            detail="模型未返回有效回答",
+        )
+
+    return {
+        "answer": answer,
+    }
+
+
+@app.post(
+    "/ai/retrieve",
+    response_model=RetrieveResponse,
+)
+def ai_retrieve(request: RetrieveRequest):
+    try:
+        results = rag_service.search_chunks(
+            question=request.question,
+            top_k=request.top_k,
+            min_score=0.5,
+        )
+    except RuntimeError:
+        raise HTTPException(
+            status_code=503,
+            detail="检索服务暂不可用",
+        )
+
+    count = len(results)
+
+    return {
+        "question": request.question,
+        "count": count,
+        "data": results,
     }

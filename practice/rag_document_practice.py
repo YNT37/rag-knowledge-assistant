@@ -82,28 +82,36 @@ def load_and_split_documents(
     return all_chunks
 
 
-script_directory = Path(__file__).resolve().parent
-documents_directory = script_directory / "documents"
+def count_chunks_by_source(chunks: list[dict]) -> dict[str, int]:
+    source_counts = {}
+    for chunk in chunks:
+        source = chunk["source"]
+        if source not in source_counts:
+            source_counts[source] = 1
+        else:
+            source_counts[source] += 1
 
-all_chunks = load_and_split_documents(
-    directory_path=documents_directory,
-    chunk_size=20,
-    chunk_overlap=5,
-)
+    return source_counts
 
-print("全部文本块数量：", len(all_chunks))
 
-for chunk_record in all_chunks:
-    print(chunk_record)
+if __name__ == "__main__":
+    chunks = [
+        {
+            "source": "fastapi.md",
+            "chunk_id": 1,
+            "content": "FastAPI 是 Web 框架",
+        },
+        {
+            "source": "sqlite.md",
+            "chunk_id": 1,
+            "content": "SQLite 是数据库",
+        },
+        {
+            "source": "fastapi.md",
+            "chunk_id": 2,
+            "content": "FastAPI 支持路由",
+        },
+    ]
 
-source_counts = {}
-
-for chunk in all_chunks:
-    source = chunk["source"]
-
-    if source not in source_counts:
-        source_counts[source] = 1
-    else:
-        source_counts[source] += 1
-
-print(source_counts)
+    print(count_chunks_by_source(chunks))
+    print(count_chunks_by_source([]))

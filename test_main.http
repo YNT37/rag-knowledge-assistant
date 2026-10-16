@@ -4,14 +4,6 @@
 GET {{baseUrl}}/
 Accept: application/json
 
-### 路径参数
-GET {{baseUrl}}/hello/Codex
-Accept: application/json
-
-### 分类 ID 校验
-GET {{baseUrl}}/categories/id/5
-Accept: application/json
-
 ### 查询参数、搜索与分页
 GET {{baseUrl}}/search?keyword=FastAPI&skip=0&limit=10
 Accept: application/json

@@ -41,7 +41,7 @@ FastAPIProject/
 ├── practice/
 │   ├── documents/                  # 本地 Markdown 知识库
 │   ├── rag_document_practice.py    # 文档读取与重叠切片
-│   ├── embedding_practice.py       # Embedding 检索练习
+│   ├── retrieval_evaluation_practice.py # 检索评估脚本
 │   └── check_torch.py              # PyTorch 与 CUDA 检查
 ├── test_main.http                  # PyCharm HTTP 请求练习
 ├── .gitignore
@@ -49,6 +49,16 @@ FastAPIProject/
 ```
 
 运行时会在项目目录使用 `tasks.db` 保存任务数据。`.env`、数据库文件、虚拟环境和缓存文件不应提交到 Git。
+
+## 2026-10-16 代码整理
+
+独立的基础、算法、SQLite/ORM和早期模型练习共16份，已归档到本机同级目录
+`../FastAPIProject-practice-archive-2026-10-16/`，保留原文件与清理前快照，不属于产品运行依赖。
+`practice/rag_document_practice.py`、`practice/documents/`、检索评估与设备检查仍保留。
+原数据库、环境、配置和待核实的空JS文件保持原位。
+
+主入口已移除3个依赖演示接口、4个打印中间件和未用SQLAlchemy导入；保留12个显式业务/欢迎接口。
+手工HTTP文件移除2条当前无对应路由的旧请求。RAG文档处理模块的迁移不在本次范围。
 
 ## 核心数据流
 
@@ -151,7 +161,7 @@ python -m uvicorn main:app --reload
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
-| `GET` | `/` | 服务健康检查与欢迎信息 |
+| `GET` | `/` | 固定欢迎信息，未检查数据库或模型健康 |
 | `GET` | `/tasks` | 查询全部任务 |
 | `GET` | `/tasks/{task_id}` | 根据 ID 查询任务 |
 | `POST` | `/tasks` | 创建任务 |
@@ -220,17 +230,13 @@ python -m uvicorn main:app --reload
 
 ## 自动化测试
 
-运行完整测试：
+以下是原测试入口。现有测试导入main时会初始化数据库，须先使用隔离副本或专用测试数据库，避免操作开发数据：
 
 ```powershell
 python -m pytest -v
 ```
 
-当前结果：
-
-```text
-36 passed
-```
+旧README记录为36 passed，仅作历史记录。2026-10-16，本轮清理后的独立副本执行现有测试为44 passed；副本数据库隔离，禁用.env加载，模型构造和外部连接被阻断，模型/检索接口由原测试替身验证。这不代表真实检索或模型回答质量通过。
 
 测试覆盖：
 

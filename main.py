@@ -103,6 +103,13 @@ class RetrieveRequest(BaseModel):
         int,
         Field(ge=1, le=10),
     ] = 3
+    min_score: Annotated[
+        float,
+        Field(
+            ge=0,
+            le=1,
+        )
+    ] = 0.5
 
 
 class RetrieveItem(BaseModel):
@@ -159,9 +166,9 @@ async def get_task(task_id: int):
     response_model=SearchResponse,
 )
 async def search_tasks(
-    keyword: Annotated[str, Query(max_length=50)] = "",
-    skip: Annotated[int, Query(ge=0)] = 0,
-    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+        keyword: Annotated[str, Query(max_length=50)] = "",
+        skip: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 10,
 ):
     selected_tasks = database.search_tasks(keyword, skip, limit)
 
@@ -248,9 +255,9 @@ async def delete_task(task_id: int):
 )
 def ai_question(request: AskRequest):
     if (
-        not llm_service.api_key
-        or not llm_service.base_url
-        or not llm_service.model
+            not llm_service.api_key
+            or not llm_service.base_url
+            or not llm_service.model
     ):
         raise HTTPException(
             status_code=503,
@@ -302,9 +309,9 @@ def build_chat_messages(request: ChatRequest) -> list[dict[str, str]]:
 )
 def ai_chat(request: ChatRequest):
     if (
-        not llm_service.api_key
-        or not llm_service.base_url
-        or not llm_service.model
+            not llm_service.api_key
+            or not llm_service.base_url
+            or not llm_service.model
     ):
         raise HTTPException(
             status_code=503,
@@ -369,7 +376,7 @@ def ai_retrieve(request: RetrieveRequest):
         results = rag_service.search_chunks(
             question=request.question,
             top_k=request.top_k,
-            min_score=0.5,
+            min_score=request.min_score,
         )
     except RuntimeError:
         raise HTTPException(

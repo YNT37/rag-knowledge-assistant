@@ -128,11 +128,11 @@ def build_context(results: list[dict]) -> str:
     return "\n\n".join(context_parts)
 
 
-def answer_with_rag(question: str) -> str | None:
+def answer_with_rag(question: str, min_score: float= 0.5) -> str | None:
     results = search_chunks(
         question=question,
         top_k=2,
-        min_score=0.5,
+        min_score=min_score,
     )
 
     if not results:
@@ -165,3 +165,9 @@ def answer_with_rag(question: str) -> str | None:
         return None
 
     return answer
+
+if __name__ == "__main__":
+    print(answer_with_rag("怎么使用github仓库管理代码", min_score=0.48))
+
+
+

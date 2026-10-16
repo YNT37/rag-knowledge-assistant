@@ -1,4 +1,7 @@
+import pytest
+
 from fastapi.testclient import TestClient
+from  fastapi.exceptions import ResponseValidationError
 from httpx2 import Request
 from openai import APIConnectionError
 
@@ -7,8 +10,8 @@ import llm_service
 import rag_service
 from main import app
 
-
 client = TestClient(app)
+client_1 = TestClient(app, raise_server_exceptions=False)
 
 
 def test_root():
@@ -147,7 +150,7 @@ def test_ai_ask_returns_503_when_api_key_is_missing(monkeypatch):
     def fake_ask_llm(question: str):
         return "模拟回答"
 
-    monkeypatch.setattr(llm_service, "api_key", None )
+    monkeypatch.setattr(llm_service, "api_key", None)
     monkeypatch.setattr(llm_service, "ask_llm", fake_ask_llm)
 
     response = client.post(
@@ -208,6 +211,7 @@ def test_ai_chat_sends_history_and_current_question(monkeypatch):
         ]
     }
 
+
 def test_ai_chat_works_without_history(monkeypatch):
     monkeypatch.setattr(llm_service, "api_key", "test_key")
     monkeypatch.setattr(llm_service, "base_url", "https://example.invalid")
@@ -215,8 +219,8 @@ def test_ai_chat_works_without_history(monkeypatch):
 
     def fake_ask_llm(messages):
         assert messages == [
-                {"role": "system", "content": "你是一名耐心的 Python 老师。"},
-                {"role": "user", "content": "我正在学习 FastAPI"},
+            {"role": "system", "content": "你是一名耐心的 Python 老师。"},
+            {"role": "user", "content": "我正在学习 FastAPI"},
         ]
 
         return "欢迎学习 FastAPI"
@@ -225,7 +229,7 @@ def test_ai_chat_works_without_history(monkeypatch):
 
     response = client.post(
         "/ai/chat",
-        json = {"question": "我正在学习 FastAPI"}
+        json={"question": "我正在学习 FastAPI"}
     )
 
     assert response.status_code == 200
@@ -282,7 +286,7 @@ def test_ai_rag_returns_503_when_connection_fails(monkeypatch):
         raise APIConnectionError(
             request=Request(
                 "POST",
-                 "https://example.invalid",
+                "https://example.invalid",
             )
         )
 
@@ -299,6 +303,22 @@ def test_ai_rag_returns_503_when_connection_fails(monkeypatch):
     assert response.json() == {
         "detail": "模型服务暂不可用",
     }
+
+
+def test_ai_rag_returns_500_when_raise_server_exceptions_is_False(monkeypatch):
+    def fake_answer_with_rag(question: str):
+        raise RuntimeError("模拟初始化失败")
+
+    monkeypatch.setattr(rag_service, "answer_with_rag", fake_answer_with_rag)
+
+    response = client_1.post(
+        "/ai/rag",
+        json={
+            "question": "FastAPI 有什么作用？",
+        }
+    )
+
+    assert response.status_code == 500
 
 
 def test_ai_rag_rejects_whitespace_question(monkeypatch):
@@ -419,9 +439,9 @@ def test_ai_rag_rejects_missing_question(monkeypatch):
 
 def test_ai_retrieve_returns_search_results(monkeypatch):
     def fake_search_chunks(
-        question: str,
-        top_k: int = 3,
-        min_score: float = 0.5,
+            question: str,
+            top_k: int = 3,
+            min_score: float = 0.5,
     ) -> list[dict]:
         assert question == "什么工具可以管理代码版本？"
         assert top_k == 2
@@ -469,9 +489,9 @@ def test_ai_retrieve_returns_search_results(monkeypatch):
 
 def test_ai_retrieve_returns_empty_data_when_no_results(monkeypatch):
     def fake_search_chunks(
-        question: str,
-        top_k: int = 3,
-        min_score: float = 0.5,
+            question: str,
+            top_k: int = 3,
+            min_score: float = 0.5,
     ) -> list[dict]:
         return []
 
@@ -562,6 +582,7 @@ def test_ai_retrieve_rejects_missing_question(monkeypatch):
     )
 
     assert response.status_code == 422
+
 
 def test_ai_retrieve_rejects_whitespace_only_question(monkeypatch):
     def fake_search_chunks(
@@ -662,6 +683,7 @@ def test_ai_retrieve_rejects_question_longer_than_500_characters(monkeypatch):
     )
 
     assert response.status_code == 422
+
 
 def test_ai_retrieve_accepts_question_with_500_characters(monkeypatch):
     def fake_search_chunks(
@@ -777,3 +799,178 @@ def test_ai_retrieve_returns_503_when_search_service_fails(monkeypatch):
     assert response.json() == {
         "detail": "检索服务暂不可用",
     }
+
+
+def test_ai_retrieve_uses_default_min_score_when_omitted(monkeypatch):
+    def fake_search_chunks(
+            question: str,
+            top_k: int,
+            min_score: float,
+    ) -> list[dict]:
+        assert question == "怎么使用github仓库管理代码"
+        assert top_k == 2
+        assert min_score == 0.5
+        return []
+
+    monkeypatch.setattr(rag_service, "search_chunks", fake_search_chunks)
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "question": "怎么使用github仓库管理代码",
+            "top_k": 2,
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "question": "怎么使用github仓库管理代码",
+        "count": 0,
+        "data": [],
+    }
+
+
+def test_ai_retrieve_passes_custom_min_score(monkeypatch):
+    def fake_search_chunks(
+            question: str,
+            top_k: int,
+            min_score: float,
+    ) -> list[dict]:
+        assert question == "怎么使用github仓库管理代码"
+        assert top_k == 2
+        assert min_score == 0.48
+        return []
+
+    monkeypatch.setattr(rag_service, "search_chunks", fake_search_chunks)
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "question": "怎么使用github仓库管理代码",
+            "top_k": 2,
+            "min_score": 0.48,
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "question": "怎么使用github仓库管理代码",
+        "count": 0,
+        "data": [],
+    }
+
+
+def test_ai_retrieve_rejects_min_score_below_zero(monkeypatch):
+    def fake_search_chunks(
+            question: str,
+            top_k: int,
+            min_score: float,
+    ) -> list[dict]:
+        raise AssertionError(
+            "无效的 min_score 不应该调用检索服务",
+        )
+
+    monkeypatch.setattr(rag_service, "search_chunks", fake_search_chunks)
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "question": "怎么使用github仓库管理代码",
+            "top_k": 2,
+            "min_score": -0.48,
+        }
+    )
+
+    assert response.status_code == 422
+
+
+def test_ai_retrieve_rejects_min_score_above_one(monkeypatch):
+    def fake_search_chunks(
+            question: str,
+            top_k: int,
+            min_score: float,
+    ) -> list[dict]:
+        raise AssertionError(
+            "无效的 min_score 不应该调用检索服务",
+        )
+
+    monkeypatch.setattr(rag_service, "search_chunks", fake_search_chunks)
+    response = client.post(
+        "/ai/retrieve",
+        json={
+            "question": "怎么使用github仓库管理代码",
+            "top_k": 2,
+            "min_score": 1.1,
+        }
+    )
+
+    assert response.status_code == 422
+
+
+def test_search_limit_101(monkeypatch):
+    def fake_search_tasks(keyword, skip, limit):
+        raise AssertionError("非法参数不应该调用数据库查询")
+
+    monkeypatch.setattr(
+        database,
+        "search_tasks",
+        fake_search_tasks,
+    )
+
+
+    response = client.get(
+        "/search",
+        params={
+            "keyword": "str",
+            "skip": 2,
+            "limit": 101,
+
+        }
+    )
+
+    assert response.status_code == 422
+
+
+def test_search_pass(monkeypatch):
+    def fake_search_tasks(keyword, skip, limit):
+        assert keyword == "str"
+        assert skip == 2
+        assert limit == 10
+
+        return []
+
+    monkeypatch.setattr(
+        database,
+        "search_tasks",
+        fake_search_tasks,
+    )
+
+    response = client.get(
+        "/search",
+        params={
+            "keyword": "str",
+            "skip": 2,
+            "limit": 10,
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "keyword": "str",
+        "skip": 2,
+        "limit": 10,
+        "data": [],
+    }
+
+def test_ai_rag_return_500_when_answer_is_not_str(monkeypatch):
+    def fake_answer_with_rag(question: str):
+        assert question == "测试"
+        return []
+
+    monkeypatch.setattr(rag_service, "answer_with_rag", fake_answer_with_rag)
+
+    # 默认 client：确认抛出的确实是“响应校验错误”
+    with pytest.raises(ResponseValidationError):
+        client.post("/ai/rag", json={"question": "测试"})
+
+    # client_1：确认客户端最终看到的状态码是 500
+    response = client_1.post("/ai/rag", json={"question": "测试"})
+    assert response.status_code == 500
+

@@ -20,8 +20,15 @@ class RagRequest(BaseModel):
     ]
 
 
+class RagSource(BaseModel):
+    source: str
+    chunk_id: int
+    content: str
+
+
 class RagResponse(BaseModel):
     answer: str
+    sources: list[RagSource]
 
 
 class RetrieveRequest(BaseModel):
@@ -65,21 +72,19 @@ class RetrieveResponse(BaseModel):
 )
 def ai_rag(request: RagRequest):
     try:
-        answer = rag_service.answer_with_rag(request.question)
+        response = rag_service.answer_with_rag(request.question)
     except APIConnectionError:
         raise HTTPException(
             status_code=503,
             detail="模型服务暂不可用",
         )
-    if answer is None:
+    if response is None:
         raise HTTPException(
             status_code=502,
             detail="模型未返回有效回答",
         )
 
-    return {
-        "answer": answer,
-    }
+    return response
 
 
 @router.post(

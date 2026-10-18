@@ -128,17 +128,29 @@ def build_context(results: list[dict]) -> str:
     return "\n\n".join(context_parts)
 
 
-def answer_with_rag(question: str, min_score: float= 0.5) -> str | None:
+def answer_with_rag(question: str, min_score: float = 0.5) -> dict | None:
     results = search_chunks(
         question=question,
         top_k=2,
         min_score=min_score,
     )
 
-    if not results:
-        return "根据现有资料无法回答"
+    sources = []
+    for result in results:
+        dic = {
+            "source": result["source"],
+            "chunk_id": result["chunk_id"],
+            "content": result["content"]
+        }
+        sources.append(dic)
 
-    context = build_context(results)
+    if not sources:
+        return {
+            "answer": "根据现有资料无法回答",
+            "sources": sources
+        }
+
+    context = build_context(sources)
 
     messages = [
         {
@@ -164,10 +176,11 @@ def answer_with_rag(question: str, min_score: float= 0.5) -> str | None:
     if answer is None or not answer.strip():
         return None
 
-    return answer
+    return {
+        "answer": answer,
+        "sources": sources
+    }
+
 
 if __name__ == "__main__":
     print(answer_with_rag("怎么使用github仓库管理代码", min_score=0.48))
-
-
-

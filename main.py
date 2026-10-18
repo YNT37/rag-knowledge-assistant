@@ -1,6 +1,6 @@
 from typing import Annotated, Literal
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends
 from openai import APIConnectionError
 from pydantic import BaseModel, Field
 
@@ -75,7 +75,6 @@ class ChatResponse(BaseModel):
     history: list[ChatMessage]
 
 
-
 app = FastAPI(
     title="FastAPI 任务练习",
     description="用于学习路由、参数校验、请求体、响应模型和 CRUD。",
@@ -112,23 +111,28 @@ async def get_task(task_id: int):
     return task
 
 
-@app.get(
-    "/search",
-    response_model=SearchResponse,
-)
-async def search_tasks(
+def get_data(
         keyword: Annotated[str, Query(max_length=50)] = "",
         skip: Annotated[int, Query(ge=0)] = 0,
         limit: Annotated[int, Query(ge=1, le=100)] = 10,
-):
+) -> dict:
     selected_tasks = database.search_tasks(keyword, skip, limit)
-
     return {
         "keyword": keyword,
         "skip": skip,
         "limit": limit,
         "data": selected_tasks,
     }
+
+
+@app.get(
+    "/search",
+    response_model=SearchResponse,
+)
+async def search_tasks(
+        responses: Annotated[dict, Depends(get_data)],
+):
+    return responses
 
 
 @app.post(
@@ -293,6 +297,3 @@ def ai_chat(request: ChatRequest):
         "answer": answer,
         "history": updated_history,
     }
-
-
-

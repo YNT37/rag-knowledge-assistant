@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>知识库问答练习</title>
+</head>
+<body>
+<div class="text">
+    <h1>技术资料知识库助手</h1>
+    <p>输入学习或工作中遇到的问题，查阅相关技术资料。</p>
+    <form method="post" action="http://localhost:8080/ai/rag" id="form" >
+        <label id="input_label" for="question">你的问题:</label>
+        <textarea name="question" id="question" rows="4" placeholder="输入学习或工作中遇到的问题，查阅相关技术资料。"
+                  required></textarea>
+        <button type="button">发送</button>
+        <button type="reset">重置</button>
+    </form>
+</div>
+<div class="text">
+    <h2>回答结果</h2>
+    <p id="answer">尚未提问</p>
+</div>
+</body>
+</html>

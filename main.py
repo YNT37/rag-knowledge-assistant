@@ -3,6 +3,7 @@ from typing import Annotated, Literal
 from fastapi import FastAPI, HTTPException, Query, Depends
 from openai import APIConnectionError
 from pydantic import BaseModel, Field
+from fastapi.middleware.cors import CORSMiddleware
 
 import database
 import llm_service
@@ -81,6 +82,12 @@ app = FastAPI(
     version="0.1.0",
 )
 app.include_router(rag_api.router)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:63342"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 database.init_db()
 
 

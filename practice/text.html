@@ -37,50 +37,65 @@
     </style>
 </head>
 <body>
-    <div class="rag">
-        <h1>技术资料知识库助手</h1>
-        <p>输入学习或工作中遇到的问题，查阅相关技术资料。</p>
-        <form method="post" action="http://localhost:8000/ai/rag" id="form" class="form">
-            <label id="input_label" for="question">你的问题:</label>
-            <textarea name="question" id="question" rows="4"
-                      placeholder="输入学习或工作中遇到的问题，查阅相关技术资料。" required></textarea>
-            <div class="buttons">
-                <button id="send" type="button">发送</button>
-                <button id="reset" type="reset">重置</button>
-            </div>
-        </form>
-    </div>
-    <div class="text">
-        <h2>回答结果</h2>
-        <p id="answer">尚未提问</p>
-    </div>
-    <script>
-        const answerElement = document.getElementById("answer");
-        const sendButton = document.getElementById("send");
-        const questionInput = document.getElementById("question");
+<div class="rag">
+    <h1>技术资料知识库助手</h1>
+    <p>输入学习或工作中遇到的问题，查阅相关技术资料。</p>
+    <form method="post" action="http://localhost:8000/ai/rag" id="form" class="form">
+        <label id="input_label" for="question">你的问题:</label>
+        <textarea name="question" id="question" rows="4"
+                  placeholder="输入学习或工作中遇到的问题，查阅相关技术资料。" required></textarea>
+        <div class="buttons">
+            <button id="send" type="button">发送</button>
+            <button id="reset" type="reset">重置</button>
+        </div>
+    </form>
+</div>
+<div class="text">
+    <h2>回答结果</h2>
+    <p id="answer">尚未提问</p>
+</div>
+<script>
+    const answerElement = document.getElementById("answer");
+    const sendButton = document.getElementById("send");
+    const questionInput = document.getElementById("question");
 
-        async function sendQuestion() {
-            if (questionInput != null) {
-                const question = questionInput.value.trim();
-                if (question !== "") {
-                    const requestData = { "question": question };
+    async function sendQuestion() {
+        if (questionInput != null) {
+            const question = questionInput.value.trim();
+            if (question !== "") {
+                const requestData = {"question": question};
 
-                    const requestOptions = {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(requestData),
-                    };
+                const requestOptions = {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(requestData),
+                };
+
+                try {
+                    sendButton.disabled = true;
+                    sendButton.textContent = "发送中...";
+                    answerElement.textContent = "正在回答...";
 
                     const response = await fetch("http://localhost:8000/ai/rag", requestOptions);
-                    const responseData = await response.json();
-                    answerElement.textContent = responseData.answer;
-                } else {
-                    answerElement.textContent = "请输入问题";
+                    if (response.ok) {
+                        const responseData = await response.json();
+                        answerElement.textContent = responseData.answer;
+                    } else {
+                        answerElement.textContent = "请求失败";
+                    }
+                } catch (error) {
+                    answerElement.textContent = "请求或处理响应失败，请稍后重试:\n" + error;
+                } finally {
+                    sendButton.disabled = false;
+                    sendButton.textContent = "发送";
                 }
+            } else {
+                answerElement.textContent = "请输入问题";
             }
         }
+    }
 
-        sendButton.addEventListener("click", sendQuestion);
-    </script>
+    sendButton.addEventListener("click", sendQuestion);
+</script>
 </body>
 </html>

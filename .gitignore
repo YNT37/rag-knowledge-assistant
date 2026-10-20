@@ -21,3 +21,7 @@ venv/
 *.db-journal
 *.db-shm
 *.db-wal
+
+# ts
+/practice/ts-practice/node_modules/
+/practice/ts-practice/dist/

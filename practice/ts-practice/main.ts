@@ -66,5 +66,47 @@ function response(q: QuestionRecord): string {
 let f = response(first);
 let s = response(second);
 
-console.log(f);
-console.log(s);
+const record: QuestionRecord = {
+    question: "11111",
+    answer: ""
+}
+
+let r = response(record);
+
+
+let data: unknown = "回答已生成";
+
+
+function TextKnown(known: unknown): string {
+    if (typeof known === "string") {
+        return known;
+    }
+
+    return "回答格式错误";
+}
+
+function getAnswer(data: unknown): string {
+    if (typeof data === "object" && data !== null && "answer" in data && typeof data.answer === "string") {
+        return data.answer;
+    }
+
+    return "回答格式错误";
+
+}
+
+async function getAnswerAsync(data: unknown): Promise<string> {
+    return getAnswer(data);
+}
+
+async function getAnswerLength(data: unknown): Promise<number> {
+    const answer = await getAnswerAsync(data);
+    return answer.length;
+}
+
+async function testAnswerLength(): Promise<number> {
+    const len = await getAnswerLength({ answer: 200 });
+    console.log(len);
+    return len;
+}
+
+testAnswerLength();

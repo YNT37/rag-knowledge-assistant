@@ -104,9 +104,30 @@ async function getAnswerLength(data: unknown): Promise<number> {
 }
 
 async function testAnswerLength(): Promise<number> {
-    const len = await getAnswerLength({ answer: 200 });
+    const len = await getAnswerLength({answer: 200});
     console.log(len);
     return len;
 }
 
 testAnswerLength();
+
+async function requestAnswer(question: string): Promise<string> {
+
+    const requestData = {"question": question};
+
+    const requestOptions = {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(requestData),
+    };
+
+    const response = await fetch("http://localhost:8000/ai/rag", requestOptions);
+
+    if (response.ok) {
+        const responseData: unknown = await response.json();
+        return getAnswer(responseData);
+
+    } else {
+        return "请求失败";
+    }
+}

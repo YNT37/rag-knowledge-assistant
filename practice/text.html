@@ -65,24 +65,13 @@
             if (question !== "") {
                 const requestData = {"question": question};
 
-                const requestOptions = {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify(requestData),
-                };
 
                 try {
                     sendButton.disabled = true;
                     sendButton.textContent = "发送中...";
                     answerElement.textContent = "正在回答...";
 
-                    const response = await fetch("http://localhost:8000/ai/rag", requestOptions);
-                    if (response.ok) {
-                        const responseData = await response.json();
-                        answerElement.textContent = responseData.answer;
-                    } else {
-                        answerElement.textContent = "请求失败";
-                    }
+
                 } catch (error) {
                     answerElement.textContent = "请求或处理响应失败，请稍后重试:\n" + error;
                 } finally {
@@ -94,6 +83,8 @@
             }
         }
     }
+
+
 
     sendButton.addEventListener("click", sendQuestion);
 </script>

@@ -54,7 +54,9 @@
     <h2>回答结果</h2>
     <p id="answer">尚未提问</p>
 </div>
-<script>
+<script type="module">
+    import {requestAnswer} from "./ts-practice/dist/rag-request.js";
+
     const answerElement = document.getElementById("answer");
     const sendButton = document.getElementById("send");
     const questionInput = document.getElementById("question");
@@ -62,16 +64,14 @@
     async function sendQuestion() {
         if (questionInput != null) {
             const question = questionInput.value.trim();
-            if (question !== "") {
-                const requestData = {"question": question};
-
+            if (question !== "")
 
                 try {
                     sendButton.disabled = true;
                     sendButton.textContent = "发送中...";
                     answerElement.textContent = "正在回答...";
-
-
+                    const answer = await requestAnswer(question);
+                    answerElement.textContent = answer;
                 } catch (error) {
                     answerElement.textContent = "请求或处理响应失败，请稍后重试:\n" + error;
                 } finally {
@@ -83,7 +83,6 @@
             }
         }
     }
-
 
 
     sendButton.addEventListener("click", sendQuestion);

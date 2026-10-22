@@ -111,7 +111,7 @@ async function testAnswerLength(): Promise<number> {
 
 testAnswerLength();
 
-async function requestAnswer(question: string): Promise<string> {
+export async function requestAnswer(question: string): Promise<string> {
 
     const requestData = {"question": question};
 

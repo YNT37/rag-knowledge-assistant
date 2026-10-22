@@ -1,10 +1,12 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+const title = "技术资料知识库助手"
+const answer: string = "尚未提问"
+</script>
 
 <template>
-  <h1>You did it!</h1>
+  <h1>{{title}}</h1>
   <p>
-    Visit <a href="https://vuejs.org/" target="_blank" rel="noopener">vuejs.org</a> to read the
-    documentation
+    {{answer}}
   </p>
 </template>
 

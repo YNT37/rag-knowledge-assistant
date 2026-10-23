@@ -131,7 +131,7 @@ def build_context(results: list[dict]) -> str:
 def answer_with_rag(question: str, min_score: float = 0.5) -> dict | None:
     results = search_chunks(
         question=question,
-        top_k=2,
+        top_k=5,
         min_score=min_score,
     )
 

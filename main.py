@@ -84,7 +84,10 @@ app = FastAPI(
 app.include_router(rag_api.router)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:63342"],
+    allow_origins=[
+        "http://localhost:63342",
+        "http://localhost:5173",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )

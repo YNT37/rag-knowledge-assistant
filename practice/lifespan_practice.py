@@ -22,6 +22,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if simulate_startup_failure:
             raise RuntimeError("模拟：启动准备失败")
         yield
+    except RuntimeError:
+        logger.exception("生命周期执行失败")
+        raise
     finally:
         logger.info("关闭：释放共享资源")
 

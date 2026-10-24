@@ -19,16 +19,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     raw_value = os.getenv("SIMULATE_STARTUP_FAILURE", "false")
     simulate_startup_failure = raw_value.lower() == "true"
     try:
+        app.state.resource = {"name": "模拟知识库"}
+        logger.info("准备完成：资源名称=%s", app.state.resource["name"])
         if simulate_startup_failure:
             raise RuntimeError("模拟：启动准备失败")
-        app.state.resource = {"name": "模拟知识库"}
         yield
     except RuntimeError:
         logger.exception("生命周期执行失败")
         raise
     finally:
         app.state.resource = None
-        logger.info("关闭：清除共享资源引用")
+        logger.info("关闭：清除资源=%s",app.state.resource)
 
 
 app = FastAPI(lifespan=lifespan)

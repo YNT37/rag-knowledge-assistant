@@ -2,8 +2,10 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Annotated
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi import Depends
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,17 +31,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         raise
     finally:
         app.state.resource = None
-        logger.info("关闭：清除资源=%s",app.state.resource)
+        logger.info("关闭：清除资源=%s", app.state.resource)
 
 
 app = FastAPI(lifespan=lifespan)
 
 
+def get_resource_name(request: Request) -> dict[str, str]:
+    return request.app.state.resource
+
+
 @app.get("/status")
-def get_status() -> dict[str, str]:
+def get_status(resource: Annotated[dict[str, str], Depends(get_resource_name)]) -> dict[str, str]:
     logger.info("请求：读取状态")
-    resource_name = app.state.resource["name"]
     return {
         "status": "ok",
-        "resource_name": resource_name
+        "resource_name": resource["name"],
     }
+
+
+@app.get("/resource")
+def get_resource(resource: Annotated[dict[str, str], Depends(get_resource_name)]) -> dict[str, str]:
+    return resource

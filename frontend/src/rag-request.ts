@@ -106,6 +106,26 @@ export async function requestRagResponse(
         return result
     }
 
-    return "请求失败"
+    try {
+        const errorData: unknown = await response.json();
+        return getRagErrorMessage(errorData);
+    } catch {
+        return "请求失败";
+    }
 }
 
+
+function getRagErrorMessage(data: unknown): string {
+    if (
+        typeof data === "object" &&
+        data !== null &&
+        "detail" in data &&
+        typeof data.detail === "string"
+    ) {
+        const detail = data.detail.trim();
+        if (detail !== "") {
+            return detail;
+        }
+    }
+    return "请求失败";
+}

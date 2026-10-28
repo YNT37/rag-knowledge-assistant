@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {ref} from "vue";
-import {requestAnswer, type RagSource, requestRagResponse} from "@/rag-request.ts";
+import {requestRagResponse} from "@/api/rag-request";
+import type {RagSource} from "@/types/rag";
 
 
 const title = "技术资料知识库助手"

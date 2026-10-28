@@ -30,25 +30,63 @@
 
 ```text
 FastAPIProject/
-├── main.py                         # FastAPI 路由、请求模型和响应模型
-├── database.py                     # SQLite 数据访问层
-├── llm_service.py                  # 大模型 API 调用
-├── rag_service.py                  # Embedding、语义检索与 RAG 服务
-├── requirements.txt                # Python 依赖
-├── .env.example                    # 环境变量示例
+├── main.py                         # main:app兼容入口
+├── app/
+│   ├── main.py                     # 应用创建、路由注册与中间件
+│   ├── api/                        # HTTP接口
+│   │   ├── task_api.py
+│   │   ├── chat_api.py
+│   │   └── rag_api.py
+│   ├── schemas/                    # 已有请求/响应格式
+│   │   ├── task_schemas.py
+│   │   ├── chat_schemas.py
+│   │   └── rag_schemas.py
+│   ├── services/                   # 模型、检索与资料业务
+│   │   ├── llm_service.py
+│   │   ├── rag_service.py
+│   │   └── document_service.py     # 空模块，待实现
+│   ├── core/
+│   │   ├── database.py             # 原SQLite任务访问，仍读根tasks.db
+│   │   ├── kb_database.py          # 空模块，MySQL知识库连接待实现
+│   │   └── kb_state.py             # 空模块，知识库共用状态待实现
+│   └── models/
+│       └── kb_models.py            # 空模块，知识库ORM待实现
+├── scripts/check_db_connection.py  # 显式数据库连接检查
 ├── tests/
-│   └── test_main.py                # 自动化接口测试
-├── practice/
-│   ├── documents/                  # 本地 Markdown 知识库
-│   ├── rag_document_practice.py    # 文档读取与重叠切片
-│   ├── retrieval_evaluation_practice.py # 检索评估脚本
-│   └── check_torch.py              # PyTorch 与 CUDA 检查
-├── test_main.http                  # PyCharm HTTP 请求练习
-├── .gitignore
+│   ├── test_main.py
+│   └── http/test_main.http
+├── frontend/src/
+│   ├── api/rag-request.ts
+│   ├── types/rag.ts
+│   ├── views/
+│   ├── components/
+│   ├── styles/
+│   └── router/
+├── practice/                       # 学习练习及当前文档切块助手
+│   └── documents/                  # 23份原正文保持原位置
+├── requirements.txt
+├── .env.example
 └── README.md
 ```
 
 运行时会在项目目录使用 `tasks.db` 保存任务数据。`.env`、数据库文件、虚拟环境和缓存文件不应提交到 Git。
+
+## 2026-10-28 目录整理
+
+本次只调整已有代码位置、导入与文件定位；未补写分类/资料管理业务。
+根 `main.py` 转发 `app.main.app`，原启动命令 `python -m uvicorn main:app --reload` 继续有效。
+实际应用接线在 `app/main.py`；以后加路由/生命周期在该文件修改。
+根 `.env`、`tasks.db`、`practice/documents` 和本地模型位置保持原位；移动模块后按项目根定位。
+空的知识库模块表示待实现，不代表MySQL模型或资料管理已接入。
+
+从工程根显式运行连接检查（由开发者确认目标库后执行）：
+
+```powershell
+python -m scripts.check_db_connection
+```
+
+检索评估使用 `python -m practice.retrieval_evaluation_practice`；它会加载真实本地模型，按原配置运行。
+手工HTTP请求文件位于 `tests/http/test_main.http`。正式测试仍须隔离数据及模型调用。
 
 ## 2026-10-16 代码整理
 
@@ -68,7 +106,7 @@ FastAPIProject/
 客户端请求
 → FastAPI 路由
 → Pydantic 请求校验
-→ database.py
+→ app/core/database.py
 → SQLite
 → 响应模型校验
 → JSON 响应
@@ -87,7 +125,7 @@ FastAPIProject/
 → 返回回答
 ```
 
-`rag_service.py` 使用延迟初始化：导入模块时不会立刻加载模型；第一次语义检索时才加载模型、读取文档并生成文档向量，同一 Python 进程中的后续请求会复用这些资源。
+`app/services/rag_service.py` 使用延迟初始化：导入模块时不会立刻加载模型；第一次语义检索时才加载模型、读取文档并生成文档向量，同一 Python 进程中的后续请求会复用这些资源。
 
 ## 创建运行环境
 
@@ -266,7 +304,7 @@ python -m pytest -v
 ## 后续计划
 
 1. 学习 SQLAlchemy 或 SQLModel，把任务数据访问迁移到 ORM；
-2. 拆分 `routers`、`schemas`、`services` 和配置模块；
+2. 已将现有接口、请求/响应模型和服务按目录拆分；继续实现知识库MySQL数据层与分类/资料管理；
 3. 持久化文档向量并接入向量数据库；
 4. 增加检索评测、重排序和结构化引用；
 5. 增加身份认证、日志、Docker 和部署说明。

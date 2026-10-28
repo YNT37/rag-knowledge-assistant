@@ -1,4 +1,4 @@
-from rag_service import search_chunks
+from app.services.rag_service import search_chunks
 
 evaluation_cases = [
     {

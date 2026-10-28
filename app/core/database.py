@@ -1,7 +1,7 @@
 import sqlite3
 from pathlib import Path
 
-DATABASE_PATH = Path(__file__).with_name("tasks.db")
+DATABASE_PATH = Path(__file__).resolve().parents[2] / "tasks.db"
 
 
 def get_connection() -> sqlite3.Connection:

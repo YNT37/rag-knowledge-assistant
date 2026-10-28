@@ -5,9 +5,9 @@ from  fastapi.exceptions import ResponseValidationError
 from httpx2 import Request
 from openai import APIConnectionError
 
-import database
-import llm_service
-import rag_service
+from app.core import database
+from app.services import llm_service
+from app.services import rag_service
 from main import app
 
 client = TestClient(app)
@@ -245,7 +245,7 @@ def test_ai_chat_works_without_history(monkeypatch):
 def test_ai_rag_returns_answer(monkeypatch):
     def fake_answer_with_rag(question: str):
         assert question == "FastAPI 有什么作用？"
-        return "FastAPI 是一个 Python Web 框架"
+        return {'answer': 'FastAPI 是一个 Python Web 框架', 'sources': [{'source': 'fastapi.md', 'chunk_id': 1, 'content': 'FastAPI 是一个 Python Web 框架'}]}
 
     monkeypatch.setattr(rag_service, "answer_with_rag", fake_answer_with_rag)
 
@@ -257,9 +257,7 @@ def test_ai_rag_returns_answer(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "answer": "FastAPI 是一个 Python Web 框架"
-    }
+    assert response.json() == {'answer': 'FastAPI 是一个 Python Web 框架', 'sources': [{'source': 'fastapi.md', 'chunk_id': 1, 'content': 'FastAPI 是一个 Python Web 框架'}]}
 
 
 def test_ai_rag_returns_502_when_answer_is_none(monkeypatch):
@@ -362,7 +360,7 @@ def test_ai_rag_rejects_question_longer_than_500_characters(monkeypatch):
 def test_ai_rag_accepts_question_with_500_characters(monkeypatch):
     def fake_answer_with_rag(question: str):
         assert len(question) == 500
-        return "模拟回答"
+        return {'answer': '模拟回答', 'sources': []}
 
     monkeypatch.setattr(rag_service, "answer_with_rag", fake_answer_with_rag)
 
@@ -376,15 +374,13 @@ def test_ai_rag_accepts_question_with_500_characters(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "answer": "模拟回答",
-    }
+    assert response.json() == {'answer': '模拟回答', 'sources': []}
 
 
 def test_ai_rag_strips_surrounding_whitespace(monkeypatch):
     def fake_answer_with_rag(question: str):
         assert question == "FastAPI 有什么作用？"
-        return "模拟回答"
+        return {'answer': '模拟回答', 'sources': []}
 
     monkeypatch.setattr(rag_service, "answer_with_rag", fake_answer_with_rag)
 
@@ -396,15 +392,13 @@ def test_ai_rag_strips_surrounding_whitespace(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "answer": "模拟回答",
-    }
+    assert response.json() == {'answer': '模拟回答', 'sources': []}
 
 
 def test_ai_rag_returns_fallback_when_no_relevant_documents(monkeypatch):
     def fake_answer_with_rag(question: str):
         assert question == "如何制作巧克力蛋糕？"
-        return "根据现有资料无法回答"
+        return {'answer': '根据现有资料无法回答', 'sources': []}
 
     monkeypatch.setattr(rag_service, "answer_with_rag", fake_answer_with_rag)
 
@@ -416,9 +410,7 @@ def test_ai_rag_returns_fallback_when_no_relevant_documents(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "answer": "根据现有资料无法回答",
-    }
+    assert response.json() == {'answer': '根据现有资料无法回答', 'sources': []}
 
 
 def test_ai_rag_rejects_missing_question(monkeypatch):

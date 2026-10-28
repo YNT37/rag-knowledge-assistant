@@ -5,10 +5,10 @@ import torch
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 
-import llm_service
+from app.services import llm_service
 from practice.rag_document_practice import load_and_split_documents
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 
 def get_model_path() -> Path:
@@ -25,7 +25,7 @@ def get_model_path() -> Path:
     return model_path
 
 
-DOCUMENTS_DIR = Path(__file__).parent / "practice" / "documents"
+DOCUMENTS_DIR = Path(__file__).resolve().parents[2] / "practice" / "documents"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 model: SentenceTransformer | None = None

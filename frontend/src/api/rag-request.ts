@@ -1,14 +1,4 @@
-export type RagSource = {
-    source: string;
-    chunk_id: number;
-    content: string;
-}
-
-type RagResponse = {
-    answer: string;
-    sources: RagSource[];
-}
-
+import type { RagSource, RagResponse } from "@/types/rag";
 
 function getAnswer(data: unknown): string {
     if (typeof data === "object" && data !== null && "answer" in data && typeof data.answer === "string") {

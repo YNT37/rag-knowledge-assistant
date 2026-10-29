@@ -1,8 +1,12 @@
+from pathlib import Path
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.kb_database import DOCUMENTS_DIR, engine
-from app.models.kb_models import Base, Category
+from app.core.kb_validation import get_document_path, normalize_source
+from app.models.kb_models import Base, Category, Document
+from app.services.document_service import recover_document_storage
 
 
 def init_kb_schema() -> None:
@@ -31,10 +35,51 @@ def ensure_default_category(session: Session) -> Category:
     return category
 
 
+def register_existing_documents(
+    session: Session,
+    directory_path: Path,
+) -> dict[str, int]:
+    default = ensure_default_category(session)
+    if not directory_path.is_dir():
+        raise RuntimeError("旧资料目录不存在")
+
+    registered = 0
+    skipped = 0
+    for file in sorted(directory_path.glob("*.md"), key=lambda path: path.name):
+        source = normalize_source(file.name)
+        if source != file.name:
+            raise RuntimeError(f"旧文件名需人工核对：{file.name}")
+        path = get_document_path(directory_path, source)
+        if not path.is_file():
+            raise RuntimeError(f"非正常Markdown文件：{source}")
+
+        existing = session.scalar(
+            select(Document).where(Document.source == source)
+        )
+        if existing is not None:
+            if existing.source != source:
+                raise RuntimeError(f"比较规则下存在文件名冲突：{source}")
+            skipped += 1
+            continue
+
+        session.add(Document(source=source, category_id=default.id))
+        session.flush()
+        registered += 1
+
+    return {"registered": registered, "skipped": skipped}
+
+
 if __name__ == "__main__":
     init_kb_schema()
     with Session(engine) as session:
         with session.begin():
             default = ensure_default_category(session)
             default_id = default.id
-    print({"default_category_id": default_id})
+            registration = register_existing_documents(session, DOCUMENTS_DIR)
+    with Session(engine) as session:
+        recovery = recover_document_storage(session, DOCUMENTS_DIR)
+    print({
+        "default_category_id": default_id,
+        **registration,
+        "recovery": recovery,
+    })

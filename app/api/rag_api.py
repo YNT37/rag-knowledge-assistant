@@ -19,6 +19,11 @@ def ai_rag(request: RagRequest):
             status_code=503,
             detail="模型服务暂不可用",
         )
+    except RuntimeError:
+        raise HTTPException(
+            status_code=503,
+            detail="检索服务暂不可用",
+        )
     if response is None:
         raise HTTPException(
             status_code=502,

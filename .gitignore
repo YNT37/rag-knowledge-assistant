@@ -12,6 +12,7 @@ venv/
 .env.*
 !.env.example
 *.log
+/practice/documents/.trash/
 
 # PyCharm
 .idea/

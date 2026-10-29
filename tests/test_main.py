@@ -303,7 +303,7 @@ def test_ai_rag_returns_503_when_connection_fails(monkeypatch):
     }
 
 
-def test_ai_rag_returns_500_when_raise_server_exceptions_is_False(monkeypatch):
+def test_ai_rag_returns_503_when_retrieval_initialization_fails(monkeypatch):
     def fake_answer_with_rag(question: str):
         raise RuntimeError("模拟初始化失败")
 
@@ -316,7 +316,10 @@ def test_ai_rag_returns_500_when_raise_server_exceptions_is_False(monkeypatch):
         }
     )
 
-    assert response.status_code == 500
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "检索服务暂不可用",
+    }
 
 
 def test_ai_rag_rejects_whitespace_question(monkeypatch):

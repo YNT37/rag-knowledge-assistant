@@ -7,9 +7,9 @@ import DocumentDetailView from '@/views/DocumentDetailView.vue'
 const router = createRouter({
     history: createWebHistory('/'),
     routes: [
-        {path: '/', component: QuestionView},
-        {path: '/documents', component: DocumentsView},
-        {path: '/documents/detail', component: DocumentDetailView},
+        {path: '/', name: 'question', component: QuestionView},
+        {path: '/documents', name: 'documents', component: DocumentsView},
+        {path: '/documents/:source', name: 'document-detail', component: DocumentDetailView},
     ]
 })
 

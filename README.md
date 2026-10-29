@@ -1,135 +1,59 @@
-# FastAPI SQLite 与 RAG 知识库 API
+# 技术资料知识库
 
-这是一个用于学习 Python 后端与 AI 应用开发的综合项目。项目从 FastAPI + SQLite 任务管理 API 起步，逐步加入大模型调用、多轮对话、本地 Embedding 语义检索、RAG 知识库问答和自动化测试。
+这是一个单用户可用的 FastAPI + Vue 3 RAG 知识库。用户可以自定义资料分类、导入和删除 Markdown 资料，并基于已登记资料进行语义检索、问答和引用核对。项目同时保留原有的任务管理和大模型练习接口。
 
-当前版本能够展示以下能力：
+## P0 功能
 
-- 使用 FastAPI 设计 REST API；
-- 使用 Pydantic 校验请求和约束响应；
-- 使用 SQLite 实现任务数据持久化和 CRUD；
-- 调用 OpenAI 兼容格式的大模型 API；
-- 实现单轮问答和由客户端传入历史的多轮对话；
-- 读取本地 Markdown 文档并进行重叠切片；
-- 使用本地 Qwen3 Embedding 模型进行语义检索；
-- 将检索结果作为上下文交给大模型生成带来源回答；
-- 使用 pytest、TestClient、monkeypatch 和临时数据库完成自动化测试。
+- 自定义分类：列表、新建、改名、删除；删除普通分类时，其资料自动移入“未分类”。
+- 资料管理：导入 Markdown、按分类列表、查看正文、移动分类、删除正文与元数据。
+- 数据持久化：MySQL 保存分类和资料元数据，Markdown 正文保存在本地目录。
+- 重启恢复：启动时检查资料正文，并恢复删除事务遗留的暂存文件。
+- RAG 问答：只读取 MySQL 已登记的资料；资料变动后在下一次检索时重建内存索引。
+- 引用核对：问答结果返回来源文件、文本块编号和原始片段，前端可跳转查看资料原文。
+- 三个前端页面：知识问答、资料管理、资料详情。
 
 ## 技术栈
 
-- Python 3.12
-- FastAPI
-- Pydantic 2
-- SQLite
-- OpenAI Python SDK（兼容 DeepSeek API）
-- Sentence Transformers
-- Qwen3-Embedding-0.6B
-- PyTorch + CUDA
+- Python 3.12、FastAPI、Pydantic 2
+- SQLAlchemy 2、MySQL 8、PyMySQL
+- Sentence Transformers、PyTorch、本地 Embedding 模型
+- OpenAI 兼容接口（当前配置为 DeepSeek）
+- Vue 3、TypeScript、Vue Router、Vite
 - pytest
 
-## 项目结构
+## 目录结构
 
 ```text
 FastAPIProject/
-├── main.py                         # main:app兼容入口
+├── main.py                         # uvicorn 兼容入口
+├── init_kb.py                      # 建表、默认分类、旧资料登记与恢复检查
 ├── app/
-│   ├── main.py                     # 应用创建、路由注册与中间件
-│   ├── api/                        # HTTP接口
-│   │   ├── task_api.py
-│   │   ├── chat_api.py
-│   │   └── rag_api.py
-│   ├── schemas/                    # 已有请求/响应格式
-│   │   ├── task_schemas.py
-│   │   ├── chat_schemas.py
-│   │   └── rag_schemas.py
-│   ├── services/                   # 模型、检索与资料业务
-│   │   ├── llm_service.py
-│   │   ├── rag_service.py
-│   │   └── document_service.py     # 空模块，待实现
-│   ├── core/
-│   │   ├── database.py             # 原SQLite任务访问，仍读根tasks.db
-│   │   ├── kb_database.py          # 空模块，MySQL知识库连接待实现
-│   │   └── kb_state.py             # 空模块，知识库共用状态待实现
-│   └── models/
-│       └── kb_models.py            # 空模块，知识库ORM待实现
-├── scripts/check_db_connection.py  # 显式数据库连接检查
-├── tests/
-│   ├── test_main.py
-│   └── http/test_main.http
+│   ├── main.py                     # FastAPI 应用、路由和启动恢复
+│   ├── api/
+│   │   ├── category_api.py         # 分类接口
+│   │   ├── document_api.py         # 资料接口
+│   │   ├── rag_api.py              # 检索与 RAG 接口
+│   │   ├── chat_api.py             # 大模型问答接口
+│   │   └── task_api.py             # 原任务管理接口
+│   ├── core/                       # 数据库、路径校验和共享状态
+│   ├── models/kb_models.py         # Category、Document ORM
+│   ├── schemas/kb_schemas.py       # 分类和资料请求/响应模型
+│   └── services/                   # 分类、资料、检索和模型业务
 ├── frontend/src/
-│   ├── api/rag-request.ts
-│   ├── types/rag.ts
-│   ├── views/
-│   ├── components/
-│   ├── styles/
-│   └── router/
-├── practice/                       # 学习练习及当前文档切块助手
-│   └── documents/                  # 23份原正文保持原位置
+│   ├── api/knowledge.ts
+│   ├── router/index.ts
+│   ├── types/
+│   └── views/
+├── practice/documents/             # 默认 Markdown 正文目录
+├── tests/test_kb_p0.py             # P0 隔离业务测试
+├── tests/test_main.py              # 原接口回归测试
 ├── requirements.txt
-├── .env.example
-└── README.md
+└── .env.example
 ```
 
-运行时会在项目目录使用 `tasks.db` 保存任务数据。`.env`、数据库文件、虚拟环境和缓存文件不应提交到 Git。
+## 首次配置
 
-## 2026-10-28 目录整理
-
-本次只调整已有代码位置、导入与文件定位；未补写分类/资料管理业务。
-根 `main.py` 转发 `app.main.app`，原启动命令 `python -m uvicorn main:app --reload` 继续有效。
-实际应用接线在 `app/main.py`；以后加路由/生命周期在该文件修改。
-根 `.env`、`tasks.db`、`practice/documents` 和本地模型位置保持原位；移动模块后按项目根定位。
-空的知识库模块表示待实现，不代表MySQL模型或资料管理已接入。
-
-从工程根显式运行连接检查（由开发者确认目标库后执行）：
-
-```powershell
-python -m scripts.check_db_connection
-```
-
-检索评估使用 `python -m practice.retrieval_evaluation_practice`；它会加载真实本地模型，按原配置运行。
-手工HTTP请求文件位于 `tests/http/test_main.http`。正式测试仍须隔离数据及模型调用。
-
-## 2026-10-16 代码整理
-
-独立的基础、算法、SQLite/ORM和早期模型练习共16份，已归档到本机同级目录
-`../FastAPIProject-practice-archive-2026-10-16/`，保留原文件与清理前快照，不属于产品运行依赖。
-`practice/rag_document_practice.py`、`practice/documents/`、检索评估与设备检查仍保留。
-原数据库、环境、配置和待核实的空JS文件保持原位。
-
-主入口已移除3个依赖演示接口、4个打印中间件和未用SQLAlchemy导入；保留12个显式业务/欢迎接口。
-手工HTTP文件移除2条当前无对应路由的旧请求。RAG文档处理模块的迁移不在本次范围。
-
-## 核心数据流
-
-### 任务管理
-
-```text
-客户端请求
-→ FastAPI 路由
-→ Pydantic 请求校验
-→ app/core/database.py
-→ SQLite
-→ 响应模型校验
-→ JSON 响应
-```
-
-### RAG 知识库问答
-
-```text
-用户问题
-→ Pydantic 清理和校验
-→ 本地 Embedding 模型生成问题向量
-→ 与文档块向量计算相似度
-→ Top K 排序和最低分过滤
-→ 组装带来源的上下文
-→ 调用大模型
-→ 返回回答
-```
-
-`app/services/rag_service.py` 使用延迟初始化：导入模块时不会立刻加载模型；第一次语义检索时才加载模型、读取文档并生成文档向量，同一 Python 进程中的后续请求会复用这些资源。
-
-## 创建运行环境
-
-在项目根目录执行：
+创建并激活虚拟环境，然后安装依赖：
 
 ```powershell
 python -m venv .venv
@@ -137,174 +61,143 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
-### 可选：安装 CUDA 版本 PyTorch
-
-普通环境可以使用 CPU。当前开发机使用 CUDA 12.6 构建：
+已有虚拟环境无需重复创建。Windows/NVIDIA GPU环境在基础依赖安装后，再选择CUDA构建：
 
 ```powershell
-python -m pip install --force-reinstall torch==2.14.0 --index-url https://download.pytorch.org/whl/cu126
+python -m pip install --no-deps -r requirements-cuda.txt
+python -m pip check
+python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())"
 ```
 
-检查运行设备：
+本机已验证 `2.14.1+cu126 / 12.6 / True`。CPU环境跳过CUDA安装；不要用IDE的普通批量升级替换GPU构建。CUDA源与版本固定在 `requirements-cuda.txt`，官方轮子入口：https://download.pytorch.org/whl/cu126/torch/。
+
+复制环境变量示例：
 
 ```powershell
-python practice/check_torch.py
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-预期在支持的 NVIDIA 显卡环境中看到：
+在 `.env` 中填写以下配置。不要把真实密钥或密码提交到 Git：
 
-```text
-CUDA 是否可用： True
-```
-
-## 配置环境变量
-
-复制示例文件：
-
-```powershell
-Copy-Item .env.example .env
-```
-
-在 `.env` 中填写：
-
-```text
+```dotenv
 LLM_API_KEY=你的DeepSeek密钥
 LLM_BASE_URL=https://api.deepseek.com
 LLM_MODEL=deepseek-flash
-EMBEDDING_MODEL_PATH=你的本地Embedding模型目录
+EMBEDDING_MODEL_PATH=你的本地Embedding模型绝对路径
+RAG_CHUNK_SIZE=400
+RAG_CHUNK_OVERLAP=80
+
+DB_USER=knowledge_app
+DB_PASSWORD=你的MySQL密码
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=knowledge_base
 ```
 
-当前使用的本地模型为：
+`KB_DOCUMENTS_DIR` 是可选项；默认目录为 `practice/documents`。如果填写，必须使用绝对路径。
 
-```text
-Qwen/Qwen3-Embedding-0.6B
-```
+`RAG_CHUNK_SIZE`和`RAG_CHUNK_OVERLAP`控制字符切块。默认400/80适合当前短篇学习资料；资料量或内容结构变化后，应结合检索评测再调整。
 
-`.env` 包含本机路径和 API 密钥，已经通过 `.gitignore` 排除，不应上传到 GitHub。`.env.example` 只用于说明项目需要哪些配置。
-
-## 启动项目
+MySQL 数据库和账号准备完成后，在项目根执行初始化：
 
 ```powershell
-python -m uvicorn main:app --reload
+python .\init_kb.py
 ```
 
-启动后访问：
+脚本会幂等创建表和默认“未分类”，登记正文目录中尚未登记的 `.md` 文件，并检查暂存恢复状态。重复执行不会重复插入同一资料。
 
-- Swagger 文档：<http://127.0.0.1:8000/docs>
-- ReDoc 文档：<http://127.0.0.1:8000/redoc>
-- OpenAPI JSON：<http://127.0.0.1:8000/openapi.json>
-- 首页：<http://127.0.0.1:8000/>
+## 启动
 
-## 接口说明
+先确认MySQL80服务为Running；若Stopped，由本人在管理员PowerShell执行 `Start-Service -Name MySQL80`。`WinError 10061`优先检查数据库服务和端口。
+
+启动后端（项目根、已激活虚拟环境）：
+
+```powershell
+python -m uvicorn app.main:app --reload
+```
+
+另开终端启动前端：
+
+```powershell
+Set-Location .\frontend
+# 仅首次或锁文件变化后安装依赖：npm.cmd ci
+npm.cmd run dev
+```
+
+访问地址：
+
+- 前端：<http://localhost:5173/>
+- Swagger：<http://127.0.0.1:8000/docs>
+- ReDoc：<http://127.0.0.1:8000/redoc>
+
+第一次提问会加载Embedding模型并构建内存索引；同一进程内后续问题复用索引。资料增删后，下次检索重新构建。终端会显示：
+
+```text
+RAG索引重建完成：chunks=..., chunk_size=..., overlap=..., device=cuda:0, elapsed=...s
+RAG问答完成：sources=..., retrieval=...s, generation=...s, total=...s
+```
+
+`retrieval`首次包含索引初始化，`generation`是外部模型等待时间。切块量减少不等于检索质量自动提升；更换参数后需用真实问题核对引用。
+
+## 知识库接口
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
-| `GET` | `/` | 固定欢迎信息，未检查数据库或模型健康 |
-| `GET` | `/tasks` | 查询全部任务 |
-| `GET` | `/tasks/{task_id}` | 根据 ID 查询任务 |
-| `POST` | `/tasks` | 创建任务 |
-| `PUT` | `/tasks/{task_id}` | 完整修改任务 |
-| `PATCH` | `/tasks/{task_id}` | 部分修改任务 |
-| `DELETE` | `/tasks/{task_id}` | 删除任务 |
-| `GET` | `/search` | 按标题搜索并分页 |
-| `POST` | `/ai/ask` | 单轮大模型问答 |
-| `POST` | `/ai/chat` | 带客户端历史的多轮对话 |
-| `POST` | `/ai/rag` | 基于本地知识库生成回答 |
-| `POST` | `/ai/retrieve` | 只返回相关文本块，不调用大模型 |
+| `GET` | `/categories` | 查询分类及资料数量 |
+| `POST` | `/categories` | 新建分类 |
+| `PATCH` | `/categories/{category_id}` | 修改分类名称 |
+| `DELETE` | `/categories/{category_id}` | 删除普通分类并迁移资料 |
+| `GET` | `/documents` | 查询资料，可传 `category_id` |
+| `POST` | `/documents` | 导入 Markdown 资料 |
+| `GET` | `/documents/{source}` | 查看资料正文 |
+| `PATCH` | `/documents/{source}/category` | 移动资料分类 |
+| `DELETE` | `/documents/{source}` | 删除资料元数据和正文 |
+| `POST` | `/ai/retrieve` | 返回相关文本块，不调用大模型 |
+| `POST` | `/ai/rag` | 返回知识库回答和引用片段 |
 
-## 请求示例
-
-### 创建任务
+导入资料示例：
 
 ```json
 {
-  "title": "学习 FastAPI",
-  "done": false
+  "source": "fastapi-notes.md",
+  "content": "# FastAPI\n\n这里是资料正文。",
+  "category_id": null
 }
 ```
 
-### RAG 问答
+`category_id` 为 `null` 时资料进入“未分类”。文件名必须是单层、小写 `.md` 文件名，正文不能为空且最多 20000 字符。
 
-```json
-{
-  "question": "FastAPI 有什么作用？"
-}
-```
+## 验证
 
-如果知识库中没有足够相关的资料，接口正常返回：
-
-```json
-{
-  "answer": "根据现有资料无法回答"
-}
-```
-
-### 纯语义检索
-
-```json
-{
-  "question": "什么工具可以管理代码版本？",
-  "top_k": 2
-}
-```
-
-响应示例：
-
-```json
-{
-  "question": "什么工具可以管理代码版本？",
-  "count": 1,
-  "data": [
-    {
-      "rank": 1,
-      "source": "git.md",
-      "chunk_id": 1,
-      "content": "Git 是一个分布式版本控制系统。",
-      "score": 0.63
-    }
-  ]
-}
-```
-
-## 自动化测试
-
-以下是原测试入口。现有测试导入main时会初始化数据库，须先使用隔离副本或专用测试数据库，避免操作开发数据：
+前端类型检查和生产构建：
 
 ```powershell
-python -m pytest -v
+Set-Location .\frontend
+npm run build
 ```
 
-旧README记录为36 passed，仅作历史记录。2026-10-16，本轮清理后的独立副本执行现有测试为44 passed；副本数据库隔离，禁用.env加载，模型构造和外部连接被阻断，模型/检索接口由原测试替身验证。这不代表真实检索或模型回答质量通过。
+P0与旧接口回归统一使用隔离入口：
 
-测试覆盖：
+```powershell
+# 在项目根且已激活.venv时运行
+python .\scripts\check_kb.py
+```
 
-- 任务查询、创建和数据校验；
-- 不存在资源的 404；
-- 查询参数边界；
-- 临时 SQLite 数据库隔离；
-- 单轮和多轮 AI 问答；
-- 模型未配置、连接失败和无效回答；
-- RAG 正常回答和无资料兜底；
-- 问题空白清理和 500 字符边界；
-- 纯检索正常结果、空结果、默认 Top K 和范围校验；
-- 检索服务不可用时返回 503。
+脚本仅复制Python源码和测试到临时目录，不复制开发`.env`、数据库或正文；使用临时SQLite与正文目录，阻断真实MySQL、Embedding模型加载和外部请求。旧接口导入时会初始化`tasks.db`，因此日常请使用此入口，避免在开发数据上直接执行旧测试。自动化使用替身，不代替真实模型质量与MySQL验证。
 
-自动化测试使用 `monkeypatch` 替换真实模型调用，因此不会下载或加载 Embedding 模型，不会占用 GPU，也不会调用付费大模型 API。
+## 演示与验收
 
-## 当前限制
+1. 新建“演示分类”，导入一份自行编写的Markdown，正文含唯一事实。
+2. 在知识问答中提问，核回答、来源片段及“查看原文”一致。
+3. 移动该资料；删除其普通分类时，资料应进入“未分类”。
+4. 重启后端，确认分类、正文与归属保留；首次提问会重新加载模型和索引。
+5. 删除刚创建的演示资料，确认列表、正文与新检索不再包含它。
 
-- 任务数据库仍直接使用 `sqlite3`，尚未接入 ORM；
-- 文档向量只缓存在当前进程内，重启后需要重新生成；
-- 尚未使用向量数据库；
-- 切块策略和相似度阈值仍是练习级固定配置；
-- 尚未实现用户注册、登录、JWT 和知识库权限隔离；
-- 尚未加入重排序、检索评测、日志、限流和缓存；
-- 尚未进行 Docker 化和生产环境部署。
+2026-10-29：本人已确认分类增改删、资料导入/移动/删除、引用打开原文和重启保留全部通过；此前真实问答截图与CUDA验证已留证。性能秒数以终端实测为准，尚无规模压测结论。临时`p0-acceptance.md`是本地验收资料，提交代码时单独排除；如需清理，从页面删除以保持数据库与文件一致，不直接删文件。
 
-## 后续计划
+## 当前边界
 
-1. 学习 SQLAlchemy 或 SQLModel，把任务数据访问迁移到 ORM；
-2. 已将现有接口、请求/响应模型和服务按目录拆分；继续实现知识库MySQL数据层与分类/资料管理；
-3. 持久化文档向量并接入向量数据库；
-4. 增加检索评测、重排序和结构化引用；
-5. 增加身份认证、日志、Docker 和部署说明。
+- 当前按单用户、单个 FastAPI 进程设计；不要使用多个 worker 并发修改资料。
+- 文档向量保存在进程内，进程重启或资料变化后按需重建。
+- 尚未实现登录、权限、多知识库、向量数据库、异步任务、Docker 和生产部署。
+- 原任务管理仍使用 SQLite `tasks.db`，与知识库 MySQL 数据分开。

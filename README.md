@@ -1,203 +1,127 @@
-# 技术资料知识库
+# 技术资料知识库助手
 
-这是一个单用户可用的 FastAPI + Vue 3 RAG 知识库。用户可以自定义资料分类、导入和删除 Markdown 资料，并基于已登记资料进行语义检索、问答和引用核对。项目同时保留原有的任务管理和大模型练习接口。
+一个面向个人学习资料的单用户知识库：管理 Markdown 资料，通过本地向量检索找到相关片段，再结合大模型生成回答，并查看引用来源。
 
-## P0 功能
+## 功能
 
-- 自定义分类：列表、新建、改名、删除；删除普通分类时，其资料自动移入“未分类”。
-- 资料管理：导入 Markdown、按分类列表、查看正文、移动分类、删除正文与元数据。
-- 数据持久化：MySQL 保存分类和资料元数据，Markdown 正文保存在本地目录。
-- 重启恢复：启动时检查资料正文，并恢复删除事务遗留的暂存文件。
-- RAG 问答：只读取 MySQL 已登记的资料；资料变动后在下一次检索时重建内存索引。
-- 引用核对：问答结果返回来源文件、文本块编号和原始片段，前端可跳转查看资料原文。
-- 三个前端页面：知识问答、资料管理、资料详情。
+- **资料管理：**新建、重命名和删除分类，导入 Markdown，查看、移动及删除资料；删除普通分类时，资料归入“未分类”。
+- **检索问答：**按块长 400 字符、重叠 80 字符切分资料，使用本地 Embedding 模型检索；问答默认取 Top K=5，并以相似度阈值 0.5 过滤。切块参数可配置，默认值并非最优效果的证明。
+- **来源核对：**展示回答所使用的来源文件与片段，支持打开原文；没有符合条件的片段时返回资料不足，不调用生成模型。
+- **持久化与恢复：**MySQL 保存分类和资料元数据，磁盘保存正文；重启时检查正文与删除暂存状态，资料变化后在下次检索时重建进程内索引。
 
-## 技术栈
+## 技术栈与链路
 
-- Python 3.12、FastAPI、Pydantic 2
-- SQLAlchemy 2、MySQL 8、PyMySQL
-- Sentence Transformers、PyTorch、本地 Embedding 模型
-- OpenAI 兼容接口（当前配置为 DeepSeek）
-- Vue 3、TypeScript、Vue Router、Vite
-- pytest
-
-## 目录结构
+- 后端：Python、FastAPI、Pydantic、SQLAlchemy、MySQL、PyMySQL
+- 检索与模型：Sentence Transformers、本地 Embedding、OpenAI 兼容的大模型 API
+- 前端：Vue 3、TypeScript、Vue Router、Vite
+- 测试：pytest、隔离测试环境与模型替身
 
 ```text
-FastAPIProject/
-├── main.py                         # uvicorn 兼容入口
-├── init_kb.py                      # 建表、默认分类、旧资料登记与恢复检查
-├── app/
-│   ├── main.py                     # FastAPI 应用、路由和启动恢复
-│   ├── api/
-│   │   ├── category_api.py         # 分类接口
-│   │   ├── document_api.py         # 资料接口
-│   │   ├── rag_api.py              # 检索与 RAG 接口
-│   │   ├── chat_api.py             # 大模型问答接口
-│   │   └── task_api.py             # 原任务管理接口
-│   ├── core/                       # 数据库、路径校验和共享状态
-│   ├── models/kb_models.py         # Category、Document ORM
-│   ├── schemas/kb_schemas.py       # 分类和资料请求/响应模型
-│   └── services/                   # 分类、资料、检索和模型业务
-├── frontend/src/
-│   ├── api/knowledge.ts
-│   ├── router/index.ts
-│   ├── types/
-│   └── views/
-├── practice/documents/             # 默认 Markdown 正文目录
-├── tests/test_kb_p0.py             # P0 隔离业务测试
-├── tests/test_main.py              # 原接口回归测试
-├── requirements.txt
-└── .env.example
+Markdown 资料 → 按字符切块 → 本地 Embedding → 进程内相似度检索
+                                                   ↓
+问题 → Embedding → Top K 与阈值过滤 → 上下文 → 大模型 → 回答与来源
 ```
 
-## 首次配置
+资料正文存放于文件目录，资料元数据由 MySQL 管理。原任务管理接口使用单独的 SQLite 数据库，与知识库 MySQL 存储并存。
 
-创建并激活虚拟环境，然后安装依赖：
+## 项目结构
+
+```text
+app/
+  api/          分类、资料、问答与原任务接口
+  core/         数据库、路径校验与索引状态
+  models/       知识库 ORM 模型
+  schemas/      请求与响应模型
+  services/     资料管理、检索和模型调用
+frontend/       Vue 3 + TypeScript 页面
+practice/       历史练习及默认资料目录；部分代码被现有检索链路引用
+scripts/        隔离回归与数据库检查脚本
+tests/          P0 业务及原接口测试
+init_kb.py      知识库建表、资料登记与恢复检查
+.env.example    环境变量示例
+```
+
+`practice/documents` 中保留按日期整理的学习资料和验收样例；部分内容描述的是历史版本，当前实现和默认参数以源码及本 README 为准。
+
+## 本地运行（Windows / PowerShell）
+
+### 1. 准备环境
+
+- Python 3.12、MySQL 8，以及已准备好的 MySQL 数据库和账号。
+- Node.js 版本满足 `frontend/package.json` 的要求：`^22.18.0 || >=24.12.0`。
+- 准备本地 Sentence Transformers 兼容的 Embedding 模型目录，以及可用的 OpenAI 兼容模型 API 配置。首次问答需要加载模型与构建索引。
+
+在项目根目录执行：
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-```
-
-已有虚拟环境无需重复创建。Windows/NVIDIA GPU环境在基础依赖安装后，再选择CUDA构建：
-
-```powershell
-python -m pip install --no-deps -r requirements-cuda.txt
-python -m pip check
-python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())"
-```
-
-本机已验证 `2.14.1+cu126 / 12.6 / True`。CPU环境跳过CUDA安装；不要用IDE的普通批量升级替换GPU构建。CUDA源与版本固定在 `requirements-cuda.txt`，官方轮子入口：https://download.pytorch.org/whl/cu126/torch/。
-
-复制环境变量示例：
-
-```powershell
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-在 `.env` 中填写以下配置。不要把真实密钥或密码提交到 Git：
+已有 `.venv` 或 `.env` 时不要覆盖，按现有环境核对。`.env` 中填写 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`、`EMBEDDING_MODEL_PATH` 和数据库连接信息；可按需设置 `RAG_CHUNK_SIZE`、`RAG_CHUNK_OVERLAP`。可选 `KB_DOCUMENTS_DIR` 必须是已存在目录的绝对路径，不设置时默认为 `practice/documents`。真实密钥和密码不要提交到仓库。
 
-```dotenv
-LLM_API_KEY=你的DeepSeek密钥
-LLM_BASE_URL=https://api.deepseek.com
-LLM_MODEL=deepseek-flash
-EMBEDDING_MODEL_PATH=你的本地Embedding模型绝对路径
-RAG_CHUNK_SIZE=400
-RAG_CHUNK_OVERLAP=80
+Windows / NVIDIA GPU 的额外依赖见 `requirements-cuda.txt`；CPU 环境不需要安装该文件。具体构建与驱动适配以运行环境为准。
 
-DB_USER=knowledge_app
-DB_PASSWORD=你的MySQL密码
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_NAME=knowledge_base
-```
+### 2. 初始化知识库
 
-`KB_DOCUMENTS_DIR` 是可选项；默认目录为 `practice/documents`。如果填写，必须使用绝对路径。
-
-`RAG_CHUNK_SIZE`和`RAG_CHUNK_OVERLAP`控制字符切块。默认400/80适合当前短篇学习资料；资料量或内容结构变化后，应结合检索评测再调整。
-
-MySQL 数据库和账号准备完成后，在项目根执行初始化：
+先核对 `.env` 中的数据库和资料目录，确认不是需要保留的其他环境，然后在项目根目录执行：
 
 ```powershell
 python .\init_kb.py
 ```
 
-脚本会幂等创建表和默认“未分类”，登记正文目录中尚未登记的 `.md` 文件，并检查暂存恢复状态。重复执行不会重复插入同一资料。
+该脚本会创建缺失的表和默认分类，并将所选资料目录中尚未登记的 Markdown 文件写入数据库，同时检查删除暂存恢复状态。**初始化会写入数据库，运行前请确认目标。**
 
-## 启动
+### 3. 启动前后端
 
-先确认MySQL80服务为Running；若Stopped，由本人在管理员PowerShell执行 `Start-Service -Name MySQL80`。`WinError 10061`优先检查数据库服务和端口。
-
-启动后端（项目根、已激活虚拟环境）：
+在项目根目录启动后端：
 
 ```powershell
 python -m uvicorn app.main:app --reload
 ```
 
-另开终端启动前端：
+另开终端，进入前端目录：
 
 ```powershell
 Set-Location .\frontend
-# 仅首次或锁文件变化后安装依赖：npm.cmd ci
+npm.cmd ci
 npm.cmd run dev
 ```
 
-访问地址：
+- 页面：<http://localhost:5173/>
+- API 文档：<http://127.0.0.1:8000/docs>
 
-- 前端：<http://localhost:5173/>
-- Swagger：<http://127.0.0.1:8000/docs>
-- ReDoc：<http://127.0.0.1:8000/redoc>
+以上为本地开发方式；当前前端请求地址和 CORS 只按本地环境配置，部署前需根据实际访问方式调整。
 
-第一次提问会加载Embedding模型并构建内存索引；同一进程内后续问题复用索引。资料增删后，下次检索重新构建。终端会显示：
+## 测试与验证
 
-```text
-RAG索引重建完成：chunks=..., chunk_size=..., overlap=..., device=cuda:0, elapsed=...s
-RAG问答完成：sources=..., retrieval=...s, generation=...s, total=...s
-```
-
-`retrieval`首次包含索引初始化，`generation`是外部模型等待时间。切块量减少不等于检索质量自动提升；更换参数后需用真实问题核对引用。
-
-## 知识库接口
-
-| 方法 | 路径 | 作用 |
-|---|---|---|
-| `GET` | `/categories` | 查询分类及资料数量 |
-| `POST` | `/categories` | 新建分类 |
-| `PATCH` | `/categories/{category_id}` | 修改分类名称 |
-| `DELETE` | `/categories/{category_id}` | 删除普通分类并迁移资料 |
-| `GET` | `/documents` | 查询资料，可传 `category_id` |
-| `POST` | `/documents` | 导入 Markdown 资料 |
-| `GET` | `/documents/{source}` | 查看资料正文 |
-| `PATCH` | `/documents/{source}/category` | 移动资料分类 |
-| `DELETE` | `/documents/{source}` | 删除资料元数据和正文 |
-| `POST` | `/ai/retrieve` | 返回相关文本块，不调用大模型 |
-| `POST` | `/ai/rag` | 返回知识库回答和引用片段 |
-
-导入资料示例：
-
-```json
-{
-  "source": "fastapi-notes.md",
-  "content": "# FastAPI\n\n这里是资料正文。",
-  "category_id": null
-}
-```
-
-`category_id` 为 `null` 时资料进入“未分类”。文件名必须是单层、小写 `.md` 文件名，正文不能为空且最多 20000 字符。
-
-## 验证
-
-前端类型检查和生产构建：
+在项目根目录、已激活虚拟环境时：
 
 ```powershell
-Set-Location .\frontend
-npm run build
-```
-
-P0与旧接口回归统一使用隔离入口：
-
-```powershell
-# 在项目根且已激活.venv时运行
 python .\scripts\check_kb.py
 ```
 
-脚本仅复制Python源码和测试到临时目录，不复制开发`.env`、数据库或正文；使用临时SQLite与正文目录，阻断真实MySQL、Embedding模型加载和外部请求。旧接口导入时会初始化`tasks.db`，因此日常请使用此入口，避免在开发数据上直接执行旧测试。自动化使用替身，不代替真实模型质量与MySQL验证。
+脚本将源码和测试复制到临时目录，使用临时 SQLite、临时资料目录及模型替身，阻断真实 MySQL、Embedding 加载和外部请求；不要直接在开发数据上运行旧测试。
 
-## 演示与验收
+2026-10-29 的隔离回归记录为 **56 项通过**，前端类型检查与生产构建通过；真实问答、引用跳转、资料管理与重启保留经过本地验收。隔离测试不等于模型回答质量评测或生产环境验证。
 
-1. 新建“演示分类”，导入一份自行编写的Markdown，正文含唯一事实。
-2. 在知识问答中提问，核回答、来源片段及“查看原文”一致。
-3. 移动该资料；删除其普通分类时，资料应进入“未分类”。
-4. 重启后端，确认分类、正文与归属保留；首次提问会重新加载模型和索引。
-5. 删除刚创建的演示资料，确认列表、正文与新检索不再包含它。
+前端构建可在 `frontend` 目录执行：
 
-2026-10-29：本人已确认分类增改删、资料导入/移动/删除、引用打开原文和重启保留全部通过；此前真实问答截图与CUDA验证已留证。性能秒数以终端实测为准，尚无规模压测结论。临时`p0-acceptance.md`是本地验收资料，提交代码时单独排除；如需清理，从页面删除以保持数据库与文件一致，不直接删文件。
+```powershell
+npm.cmd run build
+```
 
-## 当前边界
+## 演示步骤
 
-- 当前按单用户、单个 FastAPI 进程设计；不要使用多个 worker 并发修改资料。
-- 文档向量保存在进程内，进程重启或资料变化后按需重建。
-- 尚未实现登录、权限、多知识库、向量数据库、异步任务、Docker 和生产部署。
-- 原任务管理仍使用 SQLite `tasks.db`，与知识库 MySQL 数据分开。
+1. 新建演示分类，导入一份自行编写的 Markdown 资料。
+2. 根据资料提问，核对回答、来源片段和原文。
+3. 移动资料，再删除普通分类，检查资料是否归入“未分类”。
+4. 重启服务，检查资料和分类是否保留。
+
+## 当前范围
+
+- 本地单用户、单 FastAPI 进程；未实现登录、权限隔离、多知识库和生产部署。
+- 向量索引保存在进程内，进程重启或资料变化后按需重建；尚未接入持久化向量数据库。
+- 使用了 AI 辅助开发：项目本人参与前期功能、需求确认和真实验收，部分新增业务与页面由 Codex 协作实现；隔离回归由 Codex 执行。测试结果及个人贡献以实际记录为准。

@@ -1,0 +1,8 @@
+.env
+.venv/
+frontend/node_modules/
+.env.*
+.git/
+tasks.db
+practice/sqlite_practice.db
+practice/documents/

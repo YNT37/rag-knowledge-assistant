@@ -1,0 +1,36 @@
+services:
+  api:
+    build: .
+    image: rag-knowledge-api:check-20261103
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
+    environment:
+      DB_NAME: knowledge_db
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_USER: rag_app
+      DB_PASSWORD: "${DB_PASSWORD:?请设置 DB_PASSWORD}"
+      KB_DOCUMENTS_DIR: /app/data/documents
+    volumes:
+      - knowledge_documents:/app/data/documents
+    depends_on:
+      mysql:
+        condition: service_healthy
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: knowledge_db
+      MYSQL_USER: rag_app
+      MYSQL_PASSWORD: "${DB_PASSWORD:?请设置 DB_PASSWORD}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?请设置 MYSQL_ROOT_PASSWORD}"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+volumes:
+  mysql_data:
+  knowledge_documents:

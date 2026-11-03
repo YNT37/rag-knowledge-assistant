@@ -1,4 +1,6 @@
+import hashlib
 import logging
+import math
 import os
 import time
 from pathlib import Path
@@ -12,7 +14,7 @@ from app.core import kb_state
 from app.core.kb_database import DOCUMENTS_DIR, engine
 from app.core.kb_validation import get_document_path
 from app.models.kb_models import Document
-from app.services import llm_service
+from app.services import embedding_service, llm_service
 from practice.rag_document_practice import split_document
 
 
@@ -54,6 +56,40 @@ def get_model_path() -> Path:
 model: Any | None = None
 chunks: list[dict] = []
 chunk_embeddings = None
+index_identity: tuple[str, ...] | None = None
+
+
+def _embedding_identity() -> tuple[str, ...]:
+    backend = embedding_service.get_embedding_backend()
+    if backend == "local":
+        return backend, os.getenv("EMBEDDING_MODEL_PATH", "")
+    # 用摘要检测进程内凭据变化；不记录凭据或摘要。
+    key = os.getenv("EMBEDDING_API_KEY", "")
+    return (
+        backend,
+        os.getenv("EMBEDDING_BASE_URL", ""),
+        os.getenv("EMBEDDING_MODEL", ""),
+        hashlib.sha256(key.encode("utf-8")).hexdigest(),
+    )
+
+
+def _cosine_similarity(left: list[float], right: list[float]) -> float:
+    if not left or len(left) != len(right):
+        raise RuntimeError("云端向量维度不一致")
+    try:
+        if not all(math.isfinite(x) for x in (*left, *right)):
+            raise RuntimeError("云端向量包含无效数值")
+        left_norm = math.sqrt(math.fsum(x * x for x in left))
+        right_norm = math.sqrt(math.fsum(x * x for x in right))
+        if left_norm == 0 or right_norm == 0:
+            raise RuntimeError("云端向量不能为零向量")
+        score = math.fsum(x * y for x, y in zip(left, right)) / (left_norm * right_norm)
+        if not math.isfinite(score):
+            raise RuntimeError("云端向量包含无效数值")
+        # 浮点运算可能使同向量的余弦略超出理论范围。
+        return max(-1.0, min(1.0, score))
+    except (TypeError, ValueError, OverflowError):
+        raise RuntimeError("云端向量包含无效数值") from None
 
 
 def _load_registered_chunks() -> list[dict]:
@@ -81,47 +117,68 @@ def _load_registered_chunks() -> list[dict]:
 
 
 def initialize_rag() -> None:
-    global model, chunks, chunk_embeddings
+    global model, chunks, chunk_embeddings, index_identity
 
     with kb_state.OP_LOCK:
-        if not kb_state.index_dirty:
+        identity = _embedding_identity()
+        if not kb_state.index_dirty and index_identity == identity:
             return
+        # 失败时保持 dirty，避免配置变更或部分向量化后使用旧索引。
+        kb_state.index_dirty = True
 
         started_at = time.perf_counter()
         rebuilt_chunks = _load_registered_chunks()
         if not rebuilt_chunks:
             chunks = []
             chunk_embeddings = None
+            model = None
+            index_identity = identity
             kb_state.index_dirty = False
             logger.info("RAG索引为空：没有已登记资料")
             return
 
-        active_model = model
-        if active_model is None:
-            import torch
-            from sentence_transformers import SentenceTransformer
+        active_model = model if index_identity == identity else None
+        if identity[0] == "siliconflow":
+            api_key, base_url, cloud_model = embedding_service.get_siliconflow_config()
+            if active_model is None:
+                active_model = embedding_service.create_embedding_client(api_key, base_url)
+            # 服务批量上限尚未确认，先保守地每次提交一条。
+            rebuilt_embeddings = [
+                embedding_service.embed_cloud_text(active_model, chunk["content"], cloud_model)
+                for chunk in rebuilt_chunks
+            ]
+            expected_dimensions = len(rebuilt_embeddings[0])
+            for vector in rebuilt_embeddings:
+                if len(vector) != expected_dimensions:
+                    raise RuntimeError("云端向量维度不一致")
+                _cosine_similarity(vector, vector)
+        else:
+            if active_model is None:
+                import torch
+                from sentence_transformers import SentenceTransformer
 
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            active_model = SentenceTransformer(
-                str(get_model_path()),
-                device=device,
-                model_kwargs=(
-                    {"torch_dtype": torch.float32}
-                    if device == "cpu"
-                    else None
-                ),
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                active_model = SentenceTransformer(
+                    str(get_model_path()),
+                    device=device,
+                    model_kwargs=(
+                        {"torch_dtype": torch.float32}
+                        if device == "cpu"
+                        else None
+                    ),
+                )
+
+            contents = [chunk["content"] for chunk in rebuilt_chunks]
+            rebuilt_embeddings = active_model.encode(
+                contents,
+                batch_size=32,
+                show_progress_bar=False,
             )
-
-        contents = [chunk["content"] for chunk in rebuilt_chunks]
-        rebuilt_embeddings = active_model.encode(
-            contents,
-            batch_size=32,
-            show_progress_bar=False,
-        )
 
         model = active_model
         chunks = rebuilt_chunks
         chunk_embeddings = rebuilt_embeddings
+        index_identity = identity
         kb_state.index_dirty = False
         logger.info(
             "RAG索引重建完成：chunks=%d, chunk_size=%d, overlap=%d, "
@@ -129,7 +186,7 @@ def initialize_rag() -> None:
             len(rebuilt_chunks),
             RAG_CHUNK_SIZE,
             RAG_CHUNK_OVERLAP,
-            getattr(active_model, "device", "unknown"),
+            getattr(active_model, "device", identity[0]),
             time.perf_counter() - started_at,
         )
 
@@ -149,15 +206,20 @@ def search_chunks(
         if model is None or chunk_embeddings is None:
             raise RuntimeError("RAG 服务初始化失败")
 
-        question_embeddings = model.encode([question], prompt_name="query")
-        scores = model.similarity(question_embeddings, chunk_embeddings)[0]
         actual_top_k = min(top_k, len(chunks))
-        top_scores, top_indices = scores.topk(k=actual_top_k)
+        if index_identity is not None and index_identity[0] == "siliconflow":
+            _, _, cloud_model = embedding_service.get_siliconflow_config()
+            question_embedding = embedding_service.embed_cloud_text(model, question, cloud_model)
+            scores = [_cosine_similarity(question_embedding, vector) for vector in chunk_embeddings]
+            ranked = sorted(enumerate(scores), key=lambda item: (-item[1], item[0]))[:actual_top_k]
+        else:
+            question_embeddings = model.encode([question], prompt_name="query")
+            scores = model.similarity(question_embeddings, chunk_embeddings)[0]
+            top_scores, top_indices = scores.topk(k=actual_top_k)
+            ranked = [(top_indices[i].item(), top_scores[i].item()) for i in range(actual_top_k)]
 
         results = []
-        for rank in range(actual_top_k):
-            chunk_index = top_indices[rank].item()
-            score = top_scores[rank].item()
+        for rank, (chunk_index, score) in enumerate(ranked):
             if score >= min_score:
                 chunk = chunks[chunk_index]
                 results.append({

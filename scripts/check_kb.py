@@ -92,7 +92,7 @@ def main() -> int:
         (snapshot / "conftest.py").write_text(ISOLATION_PLUGIN, encoding="utf-8")
         environment = os.environ.copy()
         for key in list(environment):
-            if key.startswith(("DB_", "LLM_", "RAG_", "KB_")):
+            if key.startswith(("DB_", "LLM_", "RAG_", "KB_", "EMBEDDING_")):
                 del environment[key]
         environment.update({
             "DB_USER": "isolated_test",
@@ -115,7 +115,7 @@ def main() -> int:
         })
         command = [
             sys.executable, "-B", "-m", "pytest",
-            "tests/test_kb_p0.py", "tests/test_main.py", "-q",
+            "tests/test_kb_p0.py", "tests/test_main.py", "tests/test_cloud_embedding.py", "-q",
             "--rootdir", str(snapshot), "--confcutdir", str(snapshot),
             "--basetemp", str(snapshot / "pytest-temp"),
         ]
